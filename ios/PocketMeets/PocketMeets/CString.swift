@@ -47,7 +47,8 @@ struct Prefs: Codable, Equatable {
     var notifications_requested: Bool = false
     var last_call_notification: Int64 = 0
     var appearance: Int = 0
-    var appearance_auto: Bool = false
+    var shell_follow_system: Bool = true
+    var minimal_follow_system: Bool = true
     var small_screen_scale: Int = 100
     var small_screen_size_configured: Bool = false
     var small_screen_guide_version: Int = 0

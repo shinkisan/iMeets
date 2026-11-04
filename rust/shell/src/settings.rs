@@ -50,9 +50,12 @@ pub struct Settings {
     pub last_call_notification: i64,
     #[serde(default)]
     pub appearance: i32,
-    /// Let the shell/night look follow the system light/dark setting.
+    /// Follow the system light/dark setting inside the shell look.
     #[serde(default = "yes")]
-    pub appearance_auto: bool,
+    pub shell_follow_system: bool,
+    /// Follow the system light/dark setting inside the minimal look.
+    #[serde(default = "yes")]
+    pub minimal_follow_system: bool,
     #[serde(default = "scale")]
     pub small_screen_scale: i32,
     #[serde(default)]
@@ -92,7 +95,8 @@ impl Settings {
             notifications_requested: false,
             last_call_notification: 0,
             appearance: 0,
-            appearance_auto: true,
+            shell_follow_system: true,
+            minimal_follow_system: true,
             small_screen_scale: 100,
             small_screen_size_configured: false,
             small_screen_guide_version: 0,

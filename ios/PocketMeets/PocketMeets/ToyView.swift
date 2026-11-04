@@ -378,10 +378,16 @@ struct ToyView: View {
     /// outcomes: the shell look in light mode, night in dark mode.
     private var look: Int {
         let style = model.prefs.appearance
-        guard model.prefs.appearance_auto, [0, 1, 3, 4].contains(style) else { return style }
-        let minimal = style == 1 || style == 4
-        if colorScheme == .dark { return minimal ? 4 : 3 }
-        return minimal ? 1 : 0
+        switch style {
+        case 0, 3:
+            guard model.prefs.shell_follow_system else { return style }
+            return colorScheme == .dark ? 3 : 0
+        case 1, 4:
+            guard model.prefs.minimal_follow_system else { return style }
+            return colorScheme == .dark ? 4 : 1
+        default:
+            return style
+        }
     }
 
     private var isNight: Bool { look == 3 || look == 4 }
@@ -389,12 +395,13 @@ struct ToyView: View {
 
     private func toggleNight() {
         var next = model.prefs
-        next.appearance = isNight
-            ? (isMinimal ? 1 : 0)
-            : (isMinimal ? 4 : 3)
-        // An explicit tap wins over the system; following resumes from the
-        // appearance sheet if the user wants it back.
-        next.appearance_auto = false
+        if isMinimal {
+            next.minimal_follow_system = false
+            next.appearance = isNight ? 1 : 4
+        } else {
+            next.shell_follow_system = false
+            next.appearance = isNight ? 0 : 3
+        }
         _ = model.engine.write(next)
         model.reload()
     }
@@ -583,7 +590,6 @@ struct ToyView: View {
             if let exitStart, Date().timeIntervalSince(exitStart) >= 1 {
                 var next = model.prefs
                 next.appearance = 1
-                next.appearance_auto = false
                 _ = model.engine.write(next)
                 model.reload()
                 self.exitStart = nil

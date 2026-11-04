@@ -4,7 +4,6 @@ import UniformTypeIdentifiers
 
 struct SettingsView: View {
     @EnvironmentObject private var model: AppModel
-    @Environment(\.colorScheme) private var colorScheme
     @State private var importingSave = false
     @State private var confirmDelete = false
     @State private var showLook = false
@@ -125,21 +124,16 @@ struct SettingsView: View {
         model.prefs.language == "en" ? "Live translation" : "实时翻译"
     }
 
-    /// The look actually drawn: with following on, the family stays and the
-    /// system picks its day or night form.
+    /// Family plus the way its day/night form is picked.
     private func lookName(_ value: Int) -> String {
-        var shown = value
-        if model.prefs.appearance_auto, [0, 1, 3, 4].contains(value) {
-            let minimal = value == 1 || value == 4
-            shown = colorScheme == .dark ? (minimal ? 4 : 3) : (minimal ? 1 : 0)
-        }
-        switch shown {
-        case 1: return model.t("appearance_minimal")
-        case 2: return model.t("small_mode")
-        case 3: return model.t("appearance_night")
-        case 4: return model.t("appearance_minimal_night")
-        default: return model.t("appearance_shell")
-        }
+        if value == 2 { return model.t("small_mode") }
+        let minimal = value == 1 || value == 4
+        let follows = minimal ? model.prefs.minimal_follow_system : model.prefs.shell_follow_system
+        let mode = follows
+            ? model.t("appearance_auto")
+            : model.t(value == 3 || value == 4 ? "appearance_night" : "appearance_day")
+        let family = model.t(minimal ? "appearance_minimal" : "appearance_shell")
+        return "\(family) · \(mode)"
     }
 
     private var soundOn: Binding<Bool> {
@@ -254,20 +248,30 @@ struct ShelfSwitchForm: View {
 struct LookSheet: View {
     @EnvironmentObject private var model: AppModel
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         NavigationStack {
             Form {
+                Section(model.t("appearance_shell")) {
+                    styleRow(model.t("appearance_day"), 0, family: 0)
+                    styleRow(model.t("appearance_night"), 3, family: 0)
+                    followRow(family: 0)
+                }
+                Section(model.t("appearance_minimal")) {
+                    styleRow(model.t("appearance_day"), 1, family: 1)
+                    styleRow(model.t("appearance_night"), 4, family: 1)
+                    followRow(family: 1)
+                }
                 Section {
-                    lookRow(model.t("appearance_shell"), 0)
-                    lookRow(model.t("appearance_night"), 3)
-                    lookRow(model.t("appearance_minimal"), 1)
-                    lookRow(model.t("appearance_minimal_night"), 4)
-                    lookRow(model.t("small_mode"), 2)
-                    Toggle(isOn: autoAppearance) {
-                        Text(model.t("appearance_auto"))
+                    Button { write(appearance: 2) } label: {
+                        HStack {
+                            Text(model.t("small_mode")).foregroundStyle(Color(uiColor: .label))
+                            Spacer()
+                            if model.prefs.appearance == 2 { Image(systemName: "checkmark") }
+                        }
+                        .contentShape(Rectangle())
                     }
+                    .buttonStyle(.plain)
                 }
             }
             .navigationTitle(model.t("help_look_title"))
@@ -277,47 +281,67 @@ struct LookSheet: View {
         }
     }
 
-    private var autoAppearance: Binding<Bool> {
-        Binding(get: { model.prefs.appearance_auto }, set: { on in
-            var next = model.prefs
-            next.appearance_auto = on
-            // Following the system only means something for looks that have
-            // a light and a dark form.
-            if on && ![0, 1, 3, 4].contains(next.appearance) {
-                next.appearance = 0
-            }
-            _ = model.engine.write(next)
-            model.reload()
-        })
+    /// 0 = shell family, 1 = minimal family, 2 = the small-screen page.
+    private var activeFamily: Int {
+        switch model.prefs.appearance {
+        case 1, 4: return 1
+        case 2: return 2
+        default: return 0
+        }
     }
 
-    /// With following on, these rows pick the family and the system picks its
-    /// day or night form, so the tick marks the drawn look rather than the
-    /// stored one.
-    private var effectiveLook: Int {
-        let style = model.prefs.appearance
-        guard model.prefs.appearance_auto, [0, 1, 3, 4].contains(style) else { return style }
-        let minimal = style == 1 || style == 4
-        return colorScheme == .dark ? (minimal ? 4 : 3) : (minimal ? 1 : 0)
-    }
-
-    private func lookRow(_ title: String, _ value: Int) -> some View {
-        Button {
+    private func styleRow(_ title: String, _ value: Int, family: Int) -> some View {
+        let follows = family == 0 ? model.prefs.shell_follow_system : model.prefs.minimal_follow_system
+        let checked = activeFamily == family && !follows && model.prefs.appearance == value
+        return Button {
             var next = model.prefs
             next.appearance = value
-            _ = model.engine.write(next)
-            model.reload()
+            if family == 0 { next.shell_follow_system = false } else { next.minimal_follow_system = false }
+            commit(next)
         } label: {
             HStack {
                 Text(title).foregroundStyle(Color(uiColor: .label))
                 Spacer()
-                if effectiveLook == value {
-                    Image(systemName: "checkmark")
-                }
+                if checked { Image(systemName: "checkmark") }
             }
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+    }
+
+    private func followRow(family: Int) -> some View {
+        let follows = family == 0 ? model.prefs.shell_follow_system : model.prefs.minimal_follow_system
+        let checked = activeFamily == family && follows
+        return Button {
+            var next = model.prefs
+            if family == 0 {
+                next.shell_follow_system = true
+                if !(next.appearance == 0 || next.appearance == 3) { next.appearance = 0 }
+            } else {
+                next.minimal_follow_system = true
+                if !(next.appearance == 1 || next.appearance == 4) { next.appearance = 1 }
+            }
+            commit(next)
+        } label: {
+            HStack {
+                Text(model.t("appearance_auto")).foregroundStyle(Color(uiColor: .label))
+                Spacer()
+                if checked { Image(systemName: "checkmark") }
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func write(appearance: Int) {
+        var next = model.prefs
+        next.appearance = appearance
+        commit(next)
+    }
+
+    private func commit(_ next: Prefs) {
+        _ = model.engine.write(next)
+        model.reload()
     }
 }
 
