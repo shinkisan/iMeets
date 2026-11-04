@@ -133,6 +133,7 @@ struct SettingsView: View {
         case 1: return model.t("appearance_minimal")
         case 2: return model.t("small_mode")
         case 3: return model.t("appearance_night")
+        case 4: return model.t("appearance_minimal_night")
         default: return model.t("appearance_shell")
         }
     }
@@ -258,6 +259,7 @@ struct LookSheet: View {
                     lookRow(model.t("appearance_minimal"), 1)
                     lookRow(model.t("small_mode"), 2)
                     lookRow(model.t("appearance_night"), 3)
+                    lookRow(model.t("appearance_minimal_night"), 4)
                     Toggle(isOn: autoAppearance) {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(model.t("appearance_auto"))
@@ -280,7 +282,7 @@ struct LookSheet: View {
             next.appearance_auto = on
             // Following the system only means something for the two looks
             // that have a light and a dark form.
-            if on && next.appearance != 0 && next.appearance != 3 {
+            if on && ![0, 1, 3, 4].contains(next.appearance) {
                 next.appearance = 0
             }
             _ = model.engine.write(next)

@@ -167,7 +167,7 @@ struct ShellKey: View {
             Circle().stroke(border, lineWidth: 1)
             Text(title)
                 .font(.system(size: side * 0.32, weight: .medium))
-                .foregroundStyle(minimal ? Color.white : (night ? Color(rgb: 0xD9CDF4) : Color(rgb: 0xA56F83)))
+                .foregroundStyle(label)
             Circle().fill(Color.black.opacity(held ? 0.12 : 0))
         }
         .frame(width: side, height: side)
@@ -182,13 +182,22 @@ struct ShellKey: View {
     }
 
     private var fill: [Color] {
-        minimal
-            ? [Color(rgb: 0xC25479), Color(rgb: 0xB74168)]
-            : (night ? [Color(rgb: 0x3E3268), Color(rgb: 0x211A3B)] : [Color.white, Color(rgb: 0xFFF3F5)])
+        if minimal && night { return [Color(rgb: 0x4A3C74), Color(rgb: 0x2A2148)] }
+        if minimal { return [Color(rgb: 0xC25479), Color(rgb: 0xB74168)] }
+        if night { return [Color(rgb: 0x3E3268), Color(rgb: 0x211A3B)] }
+        return [Color.white, Color(rgb: 0xFFF3F5)]
     }
 
     private var border: Color {
-        minimal ? Color(rgb: 0xB43E65) : (night ? Color(rgb: 0x6E5BA8) : Color(rgb: 0xE3B3C4))
+        if minimal && night { return Color(rgb: 0x6E5BA8) }
+        if minimal { return Color(rgb: 0xB43E65) }
+        if night { return Color(rgb: 0x6E5BA8) }
+        return Color(rgb: 0xE3B3C4)
+    }
+
+    private var label: Color {
+        if minimal { return Color.white }
+        return night ? Color(rgb: 0xD9CDF4) : Color(rgb: 0xA56F83)
     }
 
     // The key's own touch handling is instant, so the pressed look and the

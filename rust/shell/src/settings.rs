@@ -112,7 +112,7 @@ impl Settings {
         if self.shelf_language != "jp" && self.shelf_language != "en" {
             self.shelf_language = "jp".into();
         }
-        if !(0..=3).contains(&self.appearance) {
+        if !(0..=4).contains(&self.appearance) {
             self.appearance = 0;
         }
         self.small_screen_scale = appearance::clamp_scale(self.small_screen_scale);

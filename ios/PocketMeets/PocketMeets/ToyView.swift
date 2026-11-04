@@ -19,7 +19,7 @@ struct ToyView: View {
             backgroundColor.ignoresSafeArea()
             if look == 2 {
                 smallStage(guide: guide)
-            } else if look == 1 {
+            } else if isMinimal {
                 minimalStage
             } else {
                 deviceStage
@@ -176,7 +176,7 @@ struct ToyView: View {
             )
         case 2:
             Color.black
-        case 3:
+        case 3, 4:
             NightSky()
         default:
             LinearGradient(
@@ -344,10 +344,10 @@ struct ToyView: View {
             if look == 1 || look == 2, model.prefs.screenshots, shutterAllowed(guide: showingGuide) {
                 chromeButton("camera.fill", model.t("screenshots_label")) { model.captureScreen(bypassGuide: false) }
             }
-            if look == 0 || look == 3 {
+            if look != 2 {
                 chromeButton(
-                    look == 3 ? "moon.fill" : "sun.max.fill",
-                    model.t(look == 3 ? "appearance_night" : "appearance_shell")
+                    isNight ? "moon.fill" : "sun.max.fill",
+                    model.t(isNight ? "appearance_night" : "appearance_shell")
                 ) { toggleNight() }
             }
             chromeButton(
@@ -378,13 +378,20 @@ struct ToyView: View {
     /// outcomes: the shell look in light mode, night in dark mode.
     private var look: Int {
         let style = model.prefs.appearance
-        guard model.prefs.appearance_auto, style == 0 || style == 3 else { return style }
-        return colorScheme == .dark ? 3 : 0
+        guard model.prefs.appearance_auto, [0, 1, 3, 4].contains(style) else { return style }
+        let minimal = style == 1 || style == 4
+        if colorScheme == .dark { return minimal ? 4 : 3 }
+        return minimal ? 1 : 0
     }
+
+    private var isNight: Bool { look == 3 || look == 4 }
+    private var isMinimal: Bool { look == 1 || look == 4 }
 
     private func toggleNight() {
         var next = model.prefs
-        next.appearance = look == 3 ? 0 : 3
+        next.appearance = isNight
+            ? (isMinimal ? 1 : 0)
+            : (isMinimal ? 4 : 3)
         // An explicit tap wins over the system; following resumes from the
         // appearance sheet if the user wants it back.
         next.appearance_auto = false
@@ -393,7 +400,7 @@ struct ToyView: View {
     }
 
     private var chromeColor: Color {
-        look == 3 ? Color(rgb: 0xD9CDF4) : Color(rgb: 0xA56F83)
+        isNight ? Color(rgb: 0xD9CDF4) : Color(rgb: 0xA56F83)
     }
 
     private var ocrTitle: String {
@@ -458,7 +465,7 @@ struct ToyView: View {
                     .frame(width: side, height: side)
                     .background(
                         RoundedRectangle(cornerRadius: 18)
-                            .fill(Color(rgb: 0xF0D6E1))
+                            .fill(isNight ? Color(rgb: 0x2E2748) : Color(rgb: 0xF0D6E1))
                             .padding(-13)
                     )
                 HStack(spacing: max(18, key * 0.45)) {
@@ -510,7 +517,7 @@ struct ToyView: View {
         Button(action: { model.captureScreen(bypassGuide: false) }) {
             Image(systemName: "camera.fill")
                 .font(.body.weight(.semibold))
-                .foregroundStyle(look == 3 ? Color(rgb: 0xD9CDF4) : Color(rgb: 0xA56F83))
+                .foregroundStyle(isNight ? Color(rgb: 0xD9CDF4) : Color(rgb: 0xA56F83))
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .pmGlass(Capsule(style: .continuous), interactive: true)
         }
@@ -523,7 +530,7 @@ struct ToyView: View {
             title: title,
             side: side,
             minimal: minimal,
-            night: look == 3,
+            night: isNight,
             accessibility: label
         ) { down in
             model.engine.key(index, down: down)
