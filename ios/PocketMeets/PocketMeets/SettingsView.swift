@@ -4,6 +4,7 @@ import UniformTypeIdentifiers
 
 struct SettingsView: View {
     @EnvironmentObject private var model: AppModel
+    @Environment(\.colorScheme) private var colorScheme
     @State private var importingSave = false
     @State private var confirmDelete = false
     @State private var showLook = false
@@ -124,9 +125,15 @@ struct SettingsView: View {
         model.prefs.language == "en" ? "Live translation" : "实时翻译"
     }
 
+    /// The look actually drawn: with following on, the family stays and the
+    /// system picks its day or night form.
     private func lookName(_ value: Int) -> String {
-        if model.prefs.appearance_auto { return model.t("appearance_auto") }
-        switch value {
+        var shown = value
+        if model.prefs.appearance_auto, [0, 1, 3, 4].contains(value) {
+            let minimal = value == 1 || value == 4
+            shown = colorScheme == .dark ? (minimal ? 4 : 3) : (minimal ? 1 : 0)
+        }
+        switch shown {
         case 1: return model.t("appearance_minimal")
         case 2: return model.t("small_mode")
         case 3: return model.t("appearance_night")
@@ -247,6 +254,7 @@ struct ShelfSwitchForm: View {
 struct LookSheet: View {
     @EnvironmentObject private var model: AppModel
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         NavigationStack {
@@ -283,18 +291,27 @@ struct LookSheet: View {
         })
     }
 
+    /// With following on, these rows pick the family and the system picks its
+    /// day or night form, so the tick marks the drawn look rather than the
+    /// stored one.
+    private var effectiveLook: Int {
+        let style = model.prefs.appearance
+        guard model.prefs.appearance_auto, [0, 1, 3, 4].contains(style) else { return style }
+        let minimal = style == 1 || style == 4
+        return colorScheme == .dark ? (minimal ? 4 : 3) : (minimal ? 1 : 0)
+    }
+
     private func lookRow(_ title: String, _ value: Int) -> some View {
         Button {
             var next = model.prefs
             next.appearance = value
-            next.appearance_auto = false
             _ = model.engine.write(next)
             model.reload()
         } label: {
             HStack {
                 Text(title).foregroundStyle(Color(uiColor: .label))
                 Spacer()
-                if model.prefs.appearance == value {
+                if effectiveLook == value {
                     Image(systemName: "checkmark")
                 }
             }
