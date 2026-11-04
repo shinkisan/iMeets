@@ -544,6 +544,17 @@ struct ToyView: View {
             }
             .frame(width: side, height: side)
             .onAppear { KeyHaptics.prepare() }
+            // Two-finger pinch resizes the small-screen look. There is no
+            // slider for this any more; the gesture is the only way in.
+            .simultaneousGesture(MagnificationGesture().onEnded { scale in
+                model.engine.releaseKeys()
+                var next = model.prefs
+                let percent = Int((CGFloat(next.small_screen_scale) * scale).rounded())
+                next.small_screen_scale = max(50, min(150, percent))
+                next.small_screen_size_configured = true
+                _ = model.engine.write(next)
+                model.reload()
+            })
         }
     }
 
