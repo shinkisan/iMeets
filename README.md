@@ -72,7 +72,7 @@ cargo build --release --target x86_64-apple-ios \
 
 ## 法律声明
 
-iMeets 是独立项目。Tamagotchi、Meets、On 及相关商标与美术资源归 Bandai 所有。本仓库不分发固件、ROM 素材或原 App 资源；模拟器内核为 MIT（Copyright (c) 2026 oreo-fox，见 [third_party/nijiiro-egg/LICENSE](third_party/nijiiro-egg/LICENSE)），外壳为 GPL-3.0。
+iMeets 是独立项目。Tamagotchi、Meets、On 及相关商标与美术资源归 Bandai 所有。本仓库不分发固件及其资源；模拟器内核为 MIT（Copyright (c) 2026 oreo-fox，见 [third_party/nijiiro-egg/LICENSE](third_party/nijiiro-egg/LICENSE)），外壳为 GPL-3.0。
 
 ## 协议
 
