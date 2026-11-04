@@ -20,6 +20,28 @@ iMeets 与任何 Bandai 官方产品无关，也未获 Bandai 认可。本仓库
 - 真机或模拟器
 - 你自己的 8 MiB 固件（`.bin`）
 
+## 安装
+
+**直接安装现成包**
+
+从 [Releases](https://github.com/shinkisan/iMeets/releases) 下载最新的 `iMeets-*-unsigned.ipa`，再用下面的工具之一签名安装：
+
+| 工具 | 说明 |
+|---|---|
+| AltStore / Sidekick | 先在电脑上装好 AltServer，用它把 IPA 装到手机上，用你的 Apple ID 签名 |
+| Sideloadly | 电脑连上手机，拖入 IPA，输入 Apple ID 后开始安装 |
+| TrollStore | 系统版本支持时可直接安装，无需签名 |
+
+这个包是**未签名**的，安装前需要自己重签。重签工具一般会更换 Bundle ID，所以它会和从源码编译的版本共存，存档各自独立。
+
+**从源码编译**
+
+见下面的「编译」一节。
+
+**首次打开**
+
+点「选择 ROM 文件」，从「文件」中选择你自己准备的 8 MiB 固件（`.zip` 也可以）。导入后即可开始养育。
+
 ## 编译
 
 Rust 内核与测试（Linux 或 macOS）：
