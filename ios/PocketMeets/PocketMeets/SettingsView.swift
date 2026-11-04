@@ -178,9 +178,8 @@ struct SettingsView: View {
     private func exportSave() {
         let name = model.engine.exportName()
         let url = model.engine.cacheURL.appendingPathComponent(name)
-        let message = model.engine.exportSave(to: url.path)
-        model.notice = message
-        guard message == model.t("save_exported") else { return }
+        let result = model.engine.exportSave(to: url.path)
+        guard result.ok else { model.notice = result.message; return }
         // A save-to-files picker lets the person choose the destination folder
         // instead of dropping the backup into whatever the share sheet picks.
         let picker = UIDocumentPickerViewController(forExporting: [url], asCopy: true)

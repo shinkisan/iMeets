@@ -168,12 +168,12 @@ final class Engine {
         }
     }
 
-    func exportSave(to path: String) -> String {
+    func exportSave(to path: String) -> (ok: Bool, message: String) {
         queue.sync {
-            guard let session else { return textUnlocked("import_rom_first", lang: currentLang()) }
+            guard let session else { return (false, textUnlocked("import_rom_first", lang: currentLang())) }
             let reply = path.withCString { CString.take(pm_export_save(session, $0)) }
-            if reply.isEmpty { return textUnlocked("save_exported", lang: currentLang()) }
-            return localizedUnlocked(reply)
+            let parsed = CString.ok(reply)
+            return (parsed.0, parsed.0 ? textUnlocked("save_exported", lang: currentLang()) : localizedUnlocked(parsed.1))
         }
     }
 
@@ -181,8 +181,8 @@ final class Engine {
         queue.sync {
             guard let session else { return textUnlocked("import_rom_first", lang: currentLang()) }
             let reply = path.withCString { CString.take(pm_import_save(session, $0)) }
-            if reply.isEmpty { return textUnlocked("save_imported", lang: currentLang()) }
-            return localizedUnlocked(reply)
+            let parsed = CString.ok(reply)
+            return parsed.0 ? textUnlocked("save_imported", lang: currentLang()) : localizedUnlocked(parsed.1)
         }
     }
 
