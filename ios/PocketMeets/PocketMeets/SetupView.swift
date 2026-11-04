@@ -8,32 +8,15 @@ struct SetupView: View {
     var body: some View {
         Form {
             Section {
-                Text(model.t("setup_no_bundle"))
-            } header: {
-                Text(model.t("setup_start"))
-            }
-            Section {
                 Button { pickingRom = true } label: {
                     Label(model.t("pick_rom"), systemImage: "doc.badge.plus")
                 }
-            } header: {
-                Text(model.t("setup_import"))
-            } footer: {
-                Text(model.t("setup_import_body"))
-            }
-            Section(model.t("setup_settings")) {
                 Button { model.showLanguage = true } label: {
                     Label(model.t("language_title"), systemImage: "globe")
                 }
-                Button { model.showHelp = true } label: {
-                    Label(model.t("help_title"), systemImage: "questionmark.circle")
+                Button { model.page = .about } label: {
+                    Label(model.t("about_title"), systemImage: "info.circle")
                 }
-            }
-            Section {
-                Text(model.t("about_body"))
-                Text(model.t("mit_notice"))
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
             }
         }
         .navigationTitle(model.t("app_name"))

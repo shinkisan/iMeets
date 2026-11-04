@@ -24,11 +24,9 @@ struct ToyView: View {
             } else {
                 deviceStage
             }
-            if look != 2 {
-                VStack {
-                    toolbar
-                    Spacer()
-                }
+            VStack {
+                toolbar
+                Spacer()
             }
             if liveTranslation {
                 VStack {
@@ -343,6 +341,9 @@ struct ToyView: View {
     private var toolbar: some View {
         HStack {
             Spacer()
+            if look == 1 || look == 2, model.prefs.screenshots, shutterAllowed(guide: showingGuide) {
+                chromeButton("camera.fill", model.t("screenshots_label")) { model.captureScreen(bypassGuide: false) }
+            }
             if look == 0 || look == 3 {
                 chromeButton(
                     look == 3 ? "moon.fill" : "sun.max.fill",
@@ -543,15 +544,6 @@ struct ToyView: View {
             }
             .frame(width: side, height: side)
             .onAppear { KeyHaptics.prepare() }
-            .simultaneousGesture(MagnificationGesture().onEnded { scale in
-                model.engine.releaseKeys()
-                var next = model.prefs
-                let percent = Int((CGFloat(next.small_screen_scale) * scale).rounded())
-                next.small_screen_scale = max(50, min(150, percent))
-                next.small_screen_size_configured = true
-                _ = model.engine.write(next)
-                model.reload()
-            })
         }
     }
 

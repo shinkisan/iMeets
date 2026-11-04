@@ -120,7 +120,7 @@ final class AppModel: ObservableObject {
             page = .setup
             engine.setVisible(false, interactive: focused)
         }
-        showNotes = prefs.care_intro_version < Int(engine.buildNumber())
+        showNotes = false
     }
 
     func markNotesShown() {
@@ -128,6 +128,11 @@ final class AppModel: ObservableObject {
         _ = engine.write(prefs)
         reload()
         showNotes = false
+    }
+
+    /// About is reachable from the settings page and from the first-run screen.
+    func closeAbout() {
+        page = hasSession ? .settings : .setup
     }
 
     func closeHelp() {

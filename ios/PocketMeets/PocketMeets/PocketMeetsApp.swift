@@ -42,12 +42,6 @@ struct RootView: View {
                 model.edgeBack()
             }
         )
-        .sheet(isPresented: $model.showNotes) {
-            NotesView().interactiveDismissDisabled()
-        }
-        .sheet(isPresented: $model.showHelp) {
-            HelpView()
-        }
         .sheet(isPresented: $model.showLanguage) {
             LanguageView()
         }

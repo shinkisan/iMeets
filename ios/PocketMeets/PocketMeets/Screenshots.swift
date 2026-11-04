@@ -10,9 +10,9 @@ enum LcdMetrics {
     }
 }
 
-/// Saves a PNG into the Pocket Meets album. Creates the album when it is missing.
+/// Saves a PNG into the iMeets album. Creates the album when it is missing.
 enum PhotoStore {
-    static let albumTitle = "Pocket Meets"
+    static let albumTitle = "iMeets"
 
     static func savePNG(_ file: URL, completion: @escaping (Result<Void, PhotoError>) -> Void) {
         // Finding the album reads the library, so add-only authorization is not enough.

@@ -7,7 +7,6 @@ struct SettingsView: View {
     @State private var importingSave = false
     @State private var confirmDelete = false
     @State private var showLook = false
-    @State private var showCare = false
     @ScaledMetric(relativeTo: .body) private var iconColumn: CGFloat = 22
     @AppStorage("pm.liveTranslation") private var liveTranslation = false
 
@@ -24,7 +23,6 @@ struct SettingsView: View {
                 Toggle(isOn: hapticsBinding) { settingLabel("hand.tap", model.t("key_haptics_label")) }
                 Toggle(isOn: enhancedBinding) { settingLabel("moon", model.t("residence_toggle")) }
                 Toggle(isOn: pauseBinding) { settingLabel("pause.circle", model.t("pause_care")) }
-                navRow("heart", model.t("help_care_title"), nil) { showCare = true }
                 navRow("globe", model.t("language_title"), model.prefs.language == "zh" ? "简体中文" : "English") { model.showLanguage = true }
             }
             if #available(iOS 18.0, *) {
@@ -48,32 +46,15 @@ struct SettingsView: View {
                 }
             } header: {
                 Text(model.t("progress_section"))
-            } footer: {
-                Text(model.t("switch_note"))
-            }
-            Section(model.t("help_section")) {
-                navRow("questionmark.circle", model.t("help_title"), nil) { model.showHelp = true }
             }
             Section {
-                Text(model.t("about_body"))
-                Text(model.t("mit_notice"))
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                actionRow("link", model.t("support_mixing")) {
-                    if let url = URL(string: model.engine.supportURL()) {
-                        UIApplication.shared.open(url)
-                    }
-                }
                 navRow("info.circle", model.t("about_title"), nil) { model.page = .about }
-            } header: {
-                Text(model.t("about_title"))
             }
         }
         .navigationTitle(model.t("setup_settings"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar { ToolbarItem(placement: .confirmationAction) { Button(model.t("done")) { model.page = .toy } } }
         .sheet(isPresented: $showLook) { LookSheet() }
-        .sheet(isPresented: $showCare) { CareSheet() }
         .fileImporter(isPresented: $importingSave, allowedContentTypes: [.data]) { result in
             guard case let .success(url) = result else { return }
             guard let path = model.copyFile(from: url, name: "incoming.t18s") else {
@@ -200,10 +181,13 @@ struct SettingsView: View {
         let message = model.engine.exportSave(to: url.path)
         model.notice = message
         guard message == model.t("save_exported") else { return }
-        let controller = UIActivityViewController(activityItems: [url], applicationActivities: nil)
+        // A save-to-files picker lets the person choose the destination folder
+        // instead of dropping the backup into whatever the share sheet picks.
+        let picker = UIDocumentPickerViewController(forExporting: [url], asCopy: true)
+        picker.shouldShowFileExtensions = true
         let scene = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first
         let host = scene?.windows.first { $0.isKeyWindow }?.rootViewController ?? scene?.windows.first?.rootViewController
-        host?.present(controller, animated: true)
+        host?.present(picker, animated: true)
     }
 }
 
@@ -270,7 +254,7 @@ struct LookSheet: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section(model.t("look_style")) {
+                Section {
                     lookRow(model.t("appearance_shell"), 0)
                     lookRow(model.t("appearance_minimal"), 1)
                     lookRow(model.t("small_mode"), 2)
@@ -283,14 +267,6 @@ struct LookSheet: View {
                                 .foregroundStyle(.secondary)
                         }
                     }
-                    Text("\(model.prefs.small_screen_scale)%")
-                    Slider(value: scale, in: 50...150, step: 1)
-                    Text(model.t("small_pinch")).font(.footnote)
-                    Button(model.t("small_reset")) { writeScale(100) }
-                }
-                Section(model.t("look_heading")) {
-                    Text(model.t("look_body"))
-                    Text(model.t("look_hint")).font(.footnote)
                 }
             }
             .navigationTitle(model.t("help_look_title"))
@@ -311,17 +287,6 @@ struct LookSheet: View {
             _ = model.engine.write(next)
             model.reload()
         })
-    }
-
-    private var scale: Binding<Double> {
-        Binding(get: { Double(model.prefs.small_screen_scale) }, set: { writeScale(Int($0.rounded())) })
-    }
-
-    private func writeScale(_ value: Int) {
-        var next = model.prefs
-        next.small_screen_scale = max(50, min(150, value))
-        _ = model.engine.write(next)
-        model.reload()
     }
 
     private func lookRow(_ title: String, _ value: Int) -> some View {

@@ -45,9 +45,6 @@ struct LanguageView: View {
             List {
                 languageRow("简体中文", code: "zh")
                 languageRow("English", code: "en")
-                Text(model.t("language_note"))
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
             }
             .navigationTitle(model.t("language_title"))
             .navigationBarTitleDisplayMode(.inline)
@@ -67,10 +64,12 @@ struct LanguageView: View {
                 Text(title).foregroundStyle(.primary)
                 Spacer()
                 if model.prefs.language == code {
-                    Image(systemName: "checkmark")
+                    Image(systemName: "checkmark").foregroundStyle(.primary)
                 }
             }
+            .contentShape(Rectangle())
         }
+        .buttonStyle(.plain)
     }
 }
 
@@ -79,27 +78,21 @@ struct AboutView: View {
 
     var body: some View {
         Form {
-            Section(model.t("app_name")) {
-                Text(model.t("about_body"))
-                LabeledContent(model.t("version"), value: model.engine.releaseText())
-                LabeledContent(model.t("build"), value: "\(model.engine.buildNumber())")
-                LabeledContent("Mixing", value: model.engine.mixingVersion())
-            }
             Section {
-                Text(model.t("mit_notice"))
-                Text(model.t("about_license"))
-                Text(model.t("about_font"))
-            }
-            Section {
-                Text(model.t("about_drawn"))
-                    .foregroundStyle(.secondary)
+                Text(model.t("about_simple_body"))
+                Link(destination: URL(string: "https://github.com/oreo-fox/nijiiro-egg")!) {
+                    Text(model.t("about_core_line"))
+                }
+                Link(destination: URL(string: "https://github.com/kanatallow/Open-Meets")!) {
+                    Text(model.t("about_sibling_line"))
+                }
             }
         }
         .navigationTitle(model.t("about_title"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
-                Button(model.t("back")) { model.page = .settings }
+                Button(model.t("back")) { model.closeAbout() }
             }
         }
     }

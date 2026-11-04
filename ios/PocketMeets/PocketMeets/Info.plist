@@ -5,7 +5,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>zh-Hans</string>
 	<key>CFBundleDisplayName</key>
-	<string>Pocket Meets</string>
+	<string>iMeets</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -13,7 +13,7 @@
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
-	<string>Pocket Meets</string>
+	<string>iMeets</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
@@ -40,13 +40,13 @@
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
 	<key>NSBluetoothAlwaysUsageDescription</key>
-	<string>Pocket Meets advertises as TMGC_meets so another device can send a WebMeets gift. The name is temporary.</string>
+	<string>iMeets advertises as TMGC_meets so another device can send a WebMeets gift. The name is temporary.</string>
 	<key>NSBluetoothPeripheralUsageDescription</key>
-	<string>Pocket Meets advertises as TMGC_meets so another device can send a WebMeets gift. The name is temporary.</string>
+	<string>iMeets advertises as TMGC_meets so another device can send a WebMeets gift. The name is temporary.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Pocket Meets 会把游戏截图保存到「Pocket Meets」相册。</string>
+	<string>iMeets 会把游戏截图保存到「iMeets」相册。</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
-	<string>Pocket Meets 会把游戏截图保存到「Pocket Meets」相册。</string>
+	<string>iMeets 会把游戏截图保存到「iMeets」相册。</string>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>bluetooth-peripheral</string>
