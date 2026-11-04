@@ -194,7 +194,7 @@ struct ToyView: View {
             focused: model.focused,
             shelf: model.shelfOpen,
             guide: Int32(model.prefs.small_screen_guide_version),
-            shots: model.prefs.screenshots,
+            shots: false,
             seen: model.prefs.small_screen_capture_guide_seen
         )
     }
@@ -537,7 +537,7 @@ struct ToyView: View {
                 model.engine.zone(
                     x: Float(x), y: Float(y),
                     w: Float(side), h: Float(side),
-                    screenshots: model.prefs.screenshots
+                    screenshots: false
                 )
             } onChange: { held, ended in
                 applyZones(held: held, ended: ended, guide: guide)
@@ -571,7 +571,6 @@ struct ToyView: View {
         for index in 0...2 {
             model.engine.key(index, down: keys.contains(index))
         }
-        if ended.contains(4) { model.captureScreen(bypassGuide: false) }
         if held.contains(5) && model.engine.exitAllowed(ready: model.engine.hasCurrent(), shelf: model.shelfOpen, guide: guide) {
             if exitStart == nil { exitStart = Date() }
             if let exitStart, Date().timeIntervalSince(exitStart) >= 1 {
