@@ -12,24 +12,23 @@ struct SettingsView: View {
 
     var body: some View {
         Form {
-            Section(model.t("game_settings")) {
-                Toggle(isOn: soundOn) { settingLabel("speaker.wave.2", model.t("sound_label")) }
-                Toggle(isOn: bind(\.screenshots)) { settingLabel("camera", model.t("screenshots_label")) }
-                Toggle(isOn: bind(\.follow_system_sleep)) { settingLabel("sun.max", model.t("keep_display_lit")) }
+            Section(model.t("settings_display")) {
                 navRow("paintpalette", model.t("help_look_title"), lookName(model.prefs.appearance)) { showLook = true }
                 Toggle(isOn: bind(\.dot_matrix)) { settingLabel("circle.grid.3x3", model.t("dot_matrix_label")) }
-                Toggle(isOn: bind(\.fast_keys)) { settingLabel("bolt", model.t("fast_keys_label")) }
-                    .disabled(!model.engine.usesSweetsFont())
+                Toggle(isOn: bind(\.follow_system_sleep)) { settingLabel("sun.max", model.t("keep_display_lit")) }
+                Toggle(isOn: bind(\.screenshots)) { settingLabel("camera", model.t("screenshots_label")) }
+            }
+            Section(model.t("settings_sound")) {
+                Toggle(isOn: soundOn) { settingLabel("speaker.wave.2", model.t("sound_label")) }
                 Toggle(isOn: hapticsBinding) { settingLabel("hand.tap", model.t("key_haptics_label")) }
+            }
+            Section(model.t("settings_system")) {
                 Toggle(isOn: enhancedBinding) { settingLabel("moon", model.t("residence_toggle")) }
                 Toggle(isOn: pauseBinding) { settingLabel("pause.circle", model.t("pause_care")) }
-                navRow("globe", model.t("language_title"), model.prefs.language == "zh" ? "简体中文" : "English") { model.showLanguage = true }
-            }
-            if #available(iOS 18.0, *) {
-                Section {
+                Toggle(isOn: bind(\.fast_keys)) { settingLabel("bolt", model.t("fast_keys_label")) }
+                    .disabled(!model.engine.usesSweetsFont())
+                if #available(iOS 18.0, *) {
                     Toggle(isOn: $liveTranslation) { settingLabel("text.viewfinder", ocrTitle) }
-                } header: {
-                    Text(ocrSectionTitle)
                 }
             }
             Section {
@@ -47,7 +46,8 @@ struct SettingsView: View {
             } header: {
                 Text(model.t("progress_section"))
             }
-            Section {
+            Section(model.t("settings_other")) {
+                navRow("globe", model.t("language_title"), model.prefs.language == "zh" ? "简体中文" : "English") { model.showLanguage = true }
                 navRow("info.circle", model.t("about_title"), nil) { model.page = .about }
             }
         }
@@ -117,10 +117,6 @@ struct SettingsView: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-    }
-
-    private var ocrSectionTitle: String {
-        model.prefs.language == "en" ? "Translation" : "翻译"
     }
 
     private var ocrTitle: String {
