@@ -1,10 +1,10 @@
-# Pocket Meets
+# iMeets
 
 一个 iOS 上的**拓麻歌子 Meets / On** 模拟器外壳，内核采用 MIT 协议的 [nijiiro-egg](third_party/nijiiro-egg)，交互学习 [Open Meets](https://github.com/kanatallow/Open-Meets)。
 
-![Pocket Meets 运行中，底部是实时翻译面板](docs/screenshot.png)
+![iMeets 运行中，底部是实时翻译面板](docs/screenshot.png)
 
-Pocket Meets 与任何 Bandai 官方产品无关，也未获 Bandai 认可。本仓库不提供固件。
+iMeets 与任何 Bandai 官方产品无关，也未获 Bandai 认可。本仓库不提供固件。
 
 ## 功能
 
@@ -13,8 +13,16 @@ Pocket Meets 与任何 Bandai 官方产品无关，也未获 Bandai 认可。本
 - **暂停养育。** 冻结成长、照料提醒、补时重放和玩具自己的时钟；恢复时把时钟对回手机时间，并跳过暂停的那段时间。
 - **实时翻译面板。** 直接读取玩具自己的文字缓冲，用 ROM 字模做确定性匹配，全程本地完成。内置约 1,300 条本地词表覆盖 Sweets 菜单，超出词表的句子由系统端上翻译补充；面板常驻显示，空画面以「……」占位。
 - **快速按键（实验性，可在设置中开启）。** 在固件把按键扫描例程放进 SRAM 的位置缩短消抖。实测按键到画面从 63 ms 降到 25 ms。补丁只作用于内存中的扫描例程，ROM 文件保持原样，并且字节校验通过后才会启用。
-- **外观。** 真机 / 简洁 / 小屏 / 夜间，另加「跟随系统」：系统浅色用真机、深色用夜间。顶栏提供白天/夜间和暂停养育两个按钮。
-- **后台驻留**与本地通知、设备间 **Mixing** 联机、外壳按键触感。
+- **外观。** 真机与极简各有白天、夜间两套皮肤，可以分别设为「随系统切换」；另有小屏模式。顶栏提供白天/夜间、暂停养育、翻译和设置四个按钮。
+- **按键触感。** 每个外壳按键按下时有一次轻触反馈，可在设置里关闭。
+- **后台驻留**与本地通知、设备间 **Mixing** 联机。
+
+## 界面
+
+- **首次进入**：一张卡片，包含「选择 ROM 文件」「语言」「关于」。
+- **外观**：真机（白天 / 夜间 / 随系统切换）、极简（白天 / 夜间 / 随系统切换）、小屏模式。
+- **设置**：外观与显示、声音与振动、系统、进度管理、其它（语言、关于）。
+- **小屏模式**：双指捏合可以把画面缩放到 50%–150%。
 
 ## 环境要求
 
@@ -69,6 +77,8 @@ cargo build --release --target x86_64-apple-ios \
 - 本仓库以 Sweets v062 为调试与测试基准，翻译表和快速按键补丁均以它为基准；其他 Meets / On 固件可以启动，最佳效果以 Sweets v062 为准。
 - 快速按键补丁为实验性功能，可在设置中开启；它只改写内存中的扫描例程，并在 Sweets v062 上启用。
 - 翻译面板读取固件绘制时使用的同一块文字缓冲，屏幕出现文字即可同步呈现。
+- 小屏模式的双指缩放只在画面区域内、且只有「小屏模式」外观下生效。
+- 导出存档会打开系统的「存储到文件」界面，可以自己选择保存位置。
 
 ## 相关项目
 
@@ -77,7 +87,7 @@ cargo build --release --target x86_64-apple-ios \
 
 ## 法律声明
 
-Pocket Meets 是独立项目。Tamagotchi、Meets、On 及相关商标与美术资源归 Bandai 所有。本仓库不分发固件、ROM 素材或原 App 资源；模拟器内核为 MIT（Copyright (c) 2026 oreo-fox，见 [third_party/nijiiro-egg/LICENSE](third_party/nijiiro-egg/LICENSE)），外壳为 GPL-3.0。
+iMeets 是独立项目。Tamagotchi、Meets、On 及相关商标与美术资源归 Bandai 所有。本仓库不分发固件、ROM 素材或原 App 资源；模拟器内核为 MIT（Copyright (c) 2026 oreo-fox，见 [third_party/nijiiro-egg/LICENSE](third_party/nijiiro-egg/LICENSE)），外壳为 GPL-3.0。
 
 ## 协议
 
