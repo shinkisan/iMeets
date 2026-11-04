@@ -46,7 +46,7 @@ final class AppModel: ObservableObject {
     @Published var confirmMixingBack = false
     @Published var showNotes = false
     @Published var showHelp = false
-    @Published var showLanguage = true
+    @Published var showLanguage = false
     private var heart: Timer?
     private var noticeTask: Task<Void, Never>?
     private var cameFromBackground = false

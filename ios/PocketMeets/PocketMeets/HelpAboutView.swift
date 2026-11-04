@@ -51,7 +51,7 @@ struct LanguageView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button { model.showLanguage = false } label: { Image(systemName: "checkmark").font(.system(size: 17, weight: .semibold)) }
+                    Button { model.showLanguage = false } label: { Image(systemName: "checkmark").font(.system(size: 17, weight: .semibold)).foregroundStyle(Color.pmAccent) }
                 .accessibilityLabel(model.t("done"))
                 }
             }
