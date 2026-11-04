@@ -64,10 +64,13 @@ struct SettingsView: View {
             }
             model.notice = model.engine.importSave(from: path)
         }
-        .confirmationDialog(model.t("delete_confirm"), isPresented: $confirmDelete) {
+        .alert(model.t("delete_alert_title"), isPresented: $confirmDelete) {
+            Button(model.t("cancel"), role: .cancel) { }
             Button(model.t("delete_yes"), role: .destructive) {
                 model.notice = model.engine.deleteCurrent()
             }
+        } message: {
+            Text(model.t("delete_confirm"))
         }
     }
 

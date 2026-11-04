@@ -66,7 +66,7 @@ struct LanguageView: View {
                 Text(title).foregroundStyle(.primary)
                 Spacer()
                 if model.prefs.language == code {
-                    Image(systemName: "checkmark").foregroundStyle(.primary)
+                    Image(systemName: "checkmark").foregroundStyle(Color.pmAccent)
                 }
             }
             .contentShape(Rectangle())
