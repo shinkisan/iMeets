@@ -2,7 +2,7 @@
 
 简体中文 · [English](README.en.md)
 
-一个 iOS 上的**拓麻歌子 Meets / On** 模拟器外壳，内核采用 MIT 协议的 [nijiiro-egg](third_party/nijiiro-egg)，交互学习 [Open Meets](https://github.com/kanatallow/Open-Meets)。
+一个 iOS 上的**拓麻歌子 Meets / On** 模拟器外壳，内核采用 MIT 协议的 [nijiiro-egg](https://github.com/oreo-fox/nijiiro-egg)，交互学习 [Open Meets](https://github.com/kanatallow/Open-Meets)。
 
 iMeets 与任何 Bandai 官方产品无关，也未获 Bandai 认可。本仓库不提供固件。
 

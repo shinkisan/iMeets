@@ -3,7 +3,7 @@
 English · [简体中文](README.md)
 
 An iOS shell for **Tamagotchi Meets / On** firmware dumps, built on the MIT-licensed
-[nijiiro-egg](third_party/nijiiro-egg) core, with its interface modelled on
+[nijiiro-egg](https://github.com/oreo-fox/nijiiro-egg) core, with its interface modelled on
 [Open Meets](https://github.com/kanatallow/Open-Meets).
 
 iMeets is not affiliated with or endorsed by Bandai. No firmware is provided here.
