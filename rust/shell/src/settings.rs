@@ -278,8 +278,13 @@ pub fn note_heartbeat(plan: &mut CarePlan, now_ms: i64) {
     plan.heartbeat = now_ms;
 }
 
+/// iOS runs a background refresh when it feels like it, often hours apart on
+/// a phone that is not charging. Only treat the heartbeat as dead once the gap
+/// is longer than any normal schedule.
+pub const WATCHDOG_MS: i64 = 6 * 60 * 60 * 1000;
+
 pub fn watchdog_due(plan: &CarePlan, now_ms: i64) -> bool {
-    plan.heartbeat > 0 && now_ms.saturating_sub(plan.heartbeat) > 90_000
+    plan.heartbeat > 0 && now_ms.saturating_sub(plan.heartbeat) > WATCHDOG_MS
 }
 
 pub fn apply_fallback(s: &mut Settings) {
@@ -366,8 +371,8 @@ mod tests {
         assert_eq!(plan.epoch, 2);
 
         note_heartbeat(&mut plan, 1_000);
-        assert!(!watchdog_due(&plan, 91_000));
-        assert!(watchdog_due(&plan, 91_001));
+        assert!(!watchdog_due(&plan, 1_000 + WATCHDOG_MS));
+        assert!(watchdog_due(&plan, 1_000 + WATCHDOG_MS + 1));
         apply_fallback(&mut s);
         assert!(!s.background_care);
         assert!(s.care_auto_resume);

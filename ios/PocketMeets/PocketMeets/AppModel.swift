@@ -18,7 +18,15 @@ enum AppPage: Equatable {
 @MainActor
 final class AppModel: ObservableObject {
     let engine = Engine()
-    @Published var page: AppPage = .setup
+    /// True when the last page change went deeper, so the swap animates as a
+    /// push; a pop slides back the other way.
+    @Published var navForward = true
+    @Published var page: AppPage = .setup {
+        didSet {
+            guard page != oldValue else { return }
+            navForward = Self.depth(page) >= Self.depth(oldValue)
+        }
+    }
     @Published var prefs = Prefs()
     @Published var notice = "" {
         didSet {
@@ -102,6 +110,14 @@ final class AppModel: ObservableObject {
         prefs = engine.reloadPrefs()
         KeyHaptics.enabled = prefs.key_haptics
         library = engine.library()
+    }
+
+    private static func depth(_ page: AppPage) -> Int {
+        switch page {
+        case .toy: return 0
+        case .settings, .library, .shelf, .web, .mixing: return 1
+        case .about, .help, .notes, .setup: return 2
+        }
     }
 
     func enter() {

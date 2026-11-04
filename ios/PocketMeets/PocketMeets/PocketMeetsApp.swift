@@ -22,19 +22,24 @@ struct RootView: View {
 
     var body: some View {
         NavigationStack {
-            switch model.page {
-            case .setup: SetupView()
-            case .notes: NotesView()
-            case .toy: ToyView()
-            case .settings: SettingsView()
-            case .library: LibraryView()
-            case .help: HelpView()
-            case .about: AboutView()
-            case .web: WebMeetsView()
-            case .mixing: MixingView()
-            case .shelf: ShelfView()
+            Group {
+                switch model.page {
+                case .setup: SetupView()
+                case .notes: NotesView()
+                case .toy: ToyView()
+                case .settings: SettingsView()
+                case .library: LibraryView()
+                case .help: HelpView()
+                case .about: AboutView()
+                case .web: WebMeetsView()
+                case .mixing: MixingView()
+                case .shelf: ShelfView()
+                }
             }
+            .id(model.page)
+            .transition(pageTransition)
         }
+        .animation(.spring(response: 0.34, dampingFraction: 0.9), value: model.page)
         .tint(Color.pmAccent)
         .gesture(
             DragGesture(minimumDistance: 24, coordinateSpace: .local).onEnded { value in
@@ -62,5 +67,15 @@ struct RootView: View {
             }
         }
         .animation(.spring(response: 0.32, dampingFraction: 0.86), value: model.notice)
+    }
+
+    /// A card stack: the new page slides in over the old one, and the old one
+    /// shrinks back under it instead of sliding away.
+    private var pageTransition: AnyTransition {
+        let card = AnyTransition.scale(scale: 0.92, anchor: .leading).combined(with: .opacity)
+        let cover = AnyTransition.move(edge: .trailing).combined(with: .opacity)
+        return model.navForward
+            ? .asymmetric(insertion: cover, removal: card)
+            : .asymmetric(insertion: card, removal: cover)
     }
 }
