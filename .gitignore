@@ -1,0 +1,37 @@
+/target
+**/target
+**/*.bin
+**/*.t18s
+.DS_Store
+xcuserdata/
+*.xcuserstate
+materials/
+codex-session-*.md
+.opencode/
+__pycache__/
+/screen.png
+# Xcode / iOS build output
+ios/build/
+DerivedData/
+*.ipa
+*.xcarchive
+*.dSYM
+**/xcuserdata/
+# capture dumps; regenerate from your own ROM
+tools/fixtures/sweets-full-screens.json
+# python
+*.pyc
+.venv/
+# local noise
+*.log
+*.zip
+
+# ROM-derived dumps and translation sources (not published). The menu font
+# table is embedded by the shell at build time, so it has to ship.
+tools/fixtures/*
+!tools/fixtures/sweets-menu-glyphs.json
+!tools/fixtures/sweets-small-glyphs.json
+!tools/fixtures/sweets-clock-glyphs.json
+
+# personal device install helpers (kept out of the public tree)
+/*.command

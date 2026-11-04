@@ -1,0 +1,39 @@
+# Firmware dumps and anything derived from them: never commit these.
+# Save files and snapshots contain a full copy of the flash (the firmware).
+*.bin
+*.flash
+*.flash.json
+*.snap
+# the roms and saves folders ship empty, with only their README
+/roms/*
+!/roms/README.txt
+/saves/*
+!/saves/README.txt
+
+# Screenshots show the game's copyrighted graphics.
+*.png
+frames/
+/screenshots/
+# except our own artwork
+!/docs/logo.png
+
+# Python
+__pycache__/
+*.pyc
+
+# window settings (local paths)
+settings.json
+settings.json.tmp
+
+# private notes for Claude (never commit)
+CLAUDE.local.md
+old_README.md
+
+# Rust build output, Rust snapshots and the app's log
+/target/
+*.t18s
+tg18.log
+nijiiro-egg.log
+
+# release folders built by tools/make_release.py
+/dist/
