@@ -270,7 +270,9 @@ struct LookSheet: View {
                         HStack {
                             Text(model.t("small_mode")).foregroundStyle(Color(uiColor: .label))
                             Spacer()
-                            if model.prefs.appearance == 2 { Image(systemName: "checkmark") }
+                            if model.prefs.appearance == 2 {
+                                Image(systemName: "checkmark").foregroundStyle(Color.pmAccent)
+                            }
                         }
                         .contentShape(Rectangle())
                     }
@@ -305,7 +307,7 @@ struct LookSheet: View {
             HStack {
                 Text(title).foregroundStyle(Color(uiColor: .label))
                 Spacer()
-                if checked { Image(systemName: "checkmark") }
+                if checked { Image(systemName: "checkmark").foregroundStyle(Color.pmAccent) }
             }
             .contentShape(Rectangle())
         }

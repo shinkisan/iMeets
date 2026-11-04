@@ -252,6 +252,11 @@ final class Engine {
         }
     }
 
+    /// Re-arm audio after returning to the foreground.
+    func resumeAudio() {
+        audio.resume()
+    }
+
     /// Debug helper: write the 1 MiB SRAM to a file.
     func dumpSRAM(to path: String) {
         queue.sync {
@@ -746,6 +751,7 @@ private final class PcmPlayer {
     private let engine = AVAudioEngine()
     private let player = AVAudioPlayerNode()
     private let format: AVAudioFormat?
+    private var observers: [NSObjectProtocol] = []
 
     init() {
         format = AVAudioFormat(commonFormat: .pcmFormatInt16, sampleRate: 44100, channels: 1, interleaved: true)
@@ -756,10 +762,42 @@ private final class PcmPlayer {
         try? AVAudioSession.sharedInstance().setActive(true)
         try? engine.start()
         player.play()
+        listen()
+    }
+
+    deinit {
+        observers.forEach(NotificationCenter.default.removeObserver)
+    }
+
+    /// Route changes, interruptions and a media-services reset all stop the
+    /// engine, and a stopped engine swallows everything scheduled into it, so
+    /// the toy went silent until the app was restarted. Watch for them and
+    /// re-arm the graph.
+    private func listen() {
+        let center = NotificationCenter.default
+        observers.append(center.addObserver(forName: .AVAudioEngineConfigurationChange, object: engine, queue: .main) { [weak self] _ in
+            self?.resume()
+        })
+        observers.append(center.addObserver(forName: AVAudioSession.interruptionNotification, object: nil, queue: .main) { [weak self] note in
+            let raw = (note.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt) ?? 0
+            if AVAudioSession.InterruptionType(rawValue: raw) == .ended { self?.resume() }
+        })
+        observers.append(center.addObserver(forName: AVAudioSession.mediaServicesWereResetNotification, object: nil, queue: .main) { [weak self] _ in
+            self?.resume()
+        })
+    }
+
+    func resume() {
+        guard let format else { return }
+        try? AVAudioSession.sharedInstance().setActive(true)
+        engine.connect(player, to: engine.mainMixerNode, format: format)
+        if !engine.isRunning { try? engine.start() }
+        if !player.isPlaying { player.play() }
     }
 
     func write(_ samples: [Int16], volume: Float) {
         guard let format, !samples.isEmpty else { return }
+        if !engine.isRunning || !player.isPlaying { resume() }
         engine.mainMixerNode.outputVolume = volume
         guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: AVAudioFrameCount(samples.count)) else { return }
         buffer.frameLength = AVAudioFrameCount(samples.count)
