@@ -22,24 +22,22 @@ struct RootView: View {
 
     var body: some View {
         NavigationStack {
-            Group {
+            ZStack {
                 switch model.page {
-                case .setup: SetupView()
-                case .notes: NotesView()
-                case .toy: ToyView()
-                case .settings: SettingsView()
-                case .library: LibraryView()
-                case .help: HelpView()
-                case .about: AboutView()
-                case .web: WebMeetsView()
-                case .mixing: MixingView()
-                case .shelf: ShelfView()
+                case .setup: SetupView().transition(.opacity)
+                case .notes: NotesView().transition(.opacity)
+                case .toy: ToyView().transition(.opacity)
+                case .settings: SettingsView().transition(.opacity)
+                case .library: LibraryView().transition(.opacity)
+                case .help: HelpView().transition(.opacity)
+                case .about: AboutView().transition(.opacity)
+                case .web: WebMeetsView().transition(.opacity)
+                case .mixing: MixingView().transition(.opacity)
+                case .shelf: ShelfView().transition(.opacity)
                 }
             }
-            .id(model.page)
-            .transition(pageTransition)
+            .animation(.easeInOut(duration: 0.22), value: model.page)
         }
-        .animation(.spring(response: 0.34, dampingFraction: 0.9), value: model.page)
         .tint(Color.pmAccent)
         .gesture(
             DragGesture(minimumDistance: 24, coordinateSpace: .local).onEnded { value in
@@ -69,13 +67,4 @@ struct RootView: View {
         .animation(.spring(response: 0.32, dampingFraction: 0.86), value: model.notice)
     }
 
-    /// A card stack: the new page slides in over the old one, and the old one
-    /// shrinks back under it instead of sliding away.
-    private var pageTransition: AnyTransition {
-        let card = AnyTransition.scale(scale: 0.92, anchor: .leading).combined(with: .opacity)
-        let cover = AnyTransition.move(edge: .trailing).combined(with: .opacity)
-        return model.navForward
-            ? .asymmetric(insertion: cover, removal: card)
-            : .asymmetric(insertion: card, removal: cover)
-    }
 }

@@ -293,24 +293,16 @@ pub fn apply_fallback(s: &mut Settings) {
     s.care_fallback_notice = true;
 }
 
-/// Returns the sentence to show, if any, and updates the flags.
+/// Restores background care after a watchdog trip without telling the user:
+/// both modes catch up on the next open, so the sentence only ever read as
+/// jargon. Returns None on purpose; the signature stays for the callers.
 pub fn foreground_notice(s: &mut Settings) -> Option<&'static str> {
-    let lang = Lang::parse(&s.language).unwrap_or(Lang::Zh);
     if s.care_auto_resume {
         s.background_care = true;
         s.care_auto_resume = false;
-        s.care_resumed_notice = true;
-        s.care_fallback_notice = false;
-        return Some(crate::copy::text(lang, "care_restored"));
     }
-    if s.care_fallback_notice {
-        s.care_fallback_notice = false;
-        return Some(crate::copy::text(lang, "care_fallback"));
-    }
-    if s.care_resumed_notice {
-        s.care_resumed_notice = false;
-        return Some(crate::copy::text(lang, "care_restored"));
-    }
+    s.care_fallback_notice = false;
+    s.care_resumed_notice = false;
     None
 }
 
@@ -377,23 +369,16 @@ mod tests {
         assert!(!s.background_care);
         assert!(s.care_auto_resume);
         assert!(s.care_fallback_notice);
-        let msg = foreground_notice(&mut s).unwrap();
-        assert_eq!(msg, "enhanced mode restored; if you had paused, pause stays");
+        assert!(foreground_notice(&mut s).is_none());
         assert!(s.background_care);
         assert!(!s.care_auto_resume);
+        assert!(!s.care_fallback_notice);
 
         apply_fallback(&mut s);
         set_background_care(&mut s, false);
         assert!(!s.care_auto_resume);
         assert!(!s.care_fallback_notice);
         assert!(foreground_notice(&mut s).is_none());
-
-        let mut s = Settings::new_user();
-        s.language = "en".into();
-        s.care_fallback_notice = true;
-        s.care_auto_resume = false;
-        let msg = foreground_notice(&mut s).unwrap();
-        assert_eq!(msg, "background care was interrupted, switched to normal mode, time still syncs");
 
         let _ = fs::remove_dir_all(&dir);
     }

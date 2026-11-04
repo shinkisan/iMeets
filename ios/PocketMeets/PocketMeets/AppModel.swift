@@ -18,15 +18,7 @@ enum AppPage: Equatable {
 @MainActor
 final class AppModel: ObservableObject {
     let engine = Engine()
-    /// True when the last page change went deeper, so the swap animates as a
-    /// push; a pop slides back the other way.
-    @Published var navForward = true
-    @Published var page: AppPage = .setup {
-        didSet {
-            guard page != oldValue else { return }
-            navForward = Self.depth(page) >= Self.depth(oldValue)
-        }
-    }
+    @Published var page: AppPage = .setup
     @Published var prefs = Prefs()
     @Published var notice = "" {
         didSet {
@@ -112,14 +104,6 @@ final class AppModel: ObservableObject {
         library = engine.library()
     }
 
-    private static func depth(_ page: AppPage) -> Int {
-        switch page {
-        case .toy: return 0
-        case .settings, .library, .shelf, .web, .mixing: return 1
-        case .about, .help, .notes, .setup: return 2
-        }
-    }
-
     func enter() {
         reload()
         let ready = engine.hasCurrent()
@@ -165,7 +149,6 @@ final class AppModel: ObservableObject {
             let fellBack = engine.watchCare()
             let sentence = engine.foregroundCare()
             reload()
-            if fellBack { engine.postCareFailure(lang: prefs.langCode) }
             if !sentence.isEmpty { notice = sentence }
             engine.setVisible(page == .toy || page == .mixing, interactive: true)
             heart?.invalidate()
@@ -348,7 +331,7 @@ final class AppModel: ObservableObject {
             task.expirationHandler = { task.setTaskCompleted(success: false) }
             Task { @MainActor in
                 self.engine.noteHeartbeat()
-                if self.engine.watchCare() { self.engine.postCareFailure(lang: self.prefs.langCode) }
+                _ = self.engine.watchCare()
                 self.scheduleRefresh()
                 task.setTaskCompleted(success: true)
             }
