@@ -26,7 +26,8 @@ struct HelpView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button(model.t("done")) { model.closeHelp() }
+                    Button { model.closeHelp() } label: { Image(systemName: "checkmark").font(.system(size: 17, weight: .semibold)) }
+                .accessibilityLabel(model.t("done"))
                 }
             }
         }
@@ -50,7 +51,8 @@ struct LanguageView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button(model.t("done")) { model.showLanguage = false }
+                    Button { model.showLanguage = false } label: { Image(systemName: "checkmark").font(.system(size: 17, weight: .semibold)) }
+                .accessibilityLabel(model.t("done"))
                 }
             }
         }
@@ -92,7 +94,8 @@ struct AboutView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
-                Button(model.t("back")) { model.closeAbout() }
+                Button { model.closeAbout() } label: { Image(systemName: "chevron.backward").font(.system(size: 17, weight: .semibold)) }
+                .accessibilityLabel(model.t("back"))
             }
         }
     }

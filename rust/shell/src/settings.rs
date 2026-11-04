@@ -51,7 +51,7 @@ pub struct Settings {
     #[serde(default)]
     pub appearance: i32,
     /// Let the shell/night look follow the system light/dark setting.
-    #[serde(default)]
+    #[serde(default = "yes")]
     pub appearance_auto: bool,
     #[serde(default = "scale")]
     pub small_screen_scale: i32,
@@ -92,7 +92,7 @@ impl Settings {
             notifications_requested: false,
             last_call_notification: 0,
             appearance: 0,
-            appearance_auto: false,
+            appearance_auto: true,
             small_screen_scale: 100,
             small_screen_size_configured: false,
             small_screen_guide_version: 0,

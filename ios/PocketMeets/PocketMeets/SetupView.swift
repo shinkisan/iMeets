@@ -60,7 +60,8 @@ struct NotesView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button(model.t("done")) { model.markNotesShown() }
+                    Button { model.markNotesShown() } label: { Image(systemName: "checkmark").font(.system(size: 17, weight: .semibold)) }
+                .accessibilityLabel(model.t("done"))
                 }
             }
         }

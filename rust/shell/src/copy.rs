@@ -224,7 +224,7 @@ const ROWS: &[Row] = &[
     Row { key: "capture_screen", zh: "截取当前画面", en: "Capture the current screen" },
     Row { key: "sound_label", zh: "声音", en: "Sound" },
     Row { key: "pause_care", zh: "暂停养育", en: "Pause care" },
-    Row { key: "appearance_auto", zh: "跟随系统", en: "Follow system" },
+    Row { key: "appearance_auto", zh: "主题跟随系统", en: "Follow system theme" },
     Row { key: "appearance_auto_hint", zh: "系统切到深色时用夜间，浅色时用真机", en: "Night when the system is dark, the shell look when it is light" },
     Row { key: "settings_display", zh: "外观与显示", en: "Appearance & display" },
     Row { key: "settings_sound", zh: "声音与振动", en: "Sound & haptics" },

@@ -34,7 +34,8 @@ struct LibraryView: View {
         .listStyle(.insetGrouped)
         .navigationTitle(model.t("switch_rom"))
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar { ToolbarItem(placement: .cancellationAction) { Button(model.t("back")) { model.page = .settings } } }
+        .toolbar { ToolbarItem(placement: .cancellationAction) { Button { model.page = .settings } label: { Image(systemName: "chevron.backward").font(.system(size: 17, weight: .semibold)) }
+                .accessibilityLabel(model.t("back")) } }
         .fileImporter(isPresented: $picking, allowedContentTypes: [.data, .archive]) { result in
             guard case let .success(url) = result else { return }
             guard let path = model.copyFile(from: url, name: "rom-import-\(UUID().uuidString).tmp") else {

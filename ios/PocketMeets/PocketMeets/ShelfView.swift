@@ -53,7 +53,8 @@ struct ShelfView: View {
                 ShelfSwitchForm()
                     .navigationTitle(model.t("shelf_pack_row"))
                     .navigationBarTitleDisplayMode(.inline)
-                    .toolbar { ToolbarItem(placement: .confirmationAction) { Button(model.t("done")) { showPack = false } } }
+                    .toolbar { ToolbarItem(placement: .confirmationAction) { Button { showPack = false } label: { Image(systemName: "checkmark").font(.system(size: 17, weight: .semibold)) }
+                .accessibilityLabel(model.t("done")) } }
             }
         }
         .fileImporter(isPresented: $pickingPack, allowedContentTypes: [.archive, .data]) { result in
@@ -335,7 +336,8 @@ struct ShelfView: View {
             }
             .navigationTitle(model.t("shelf_money"))
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .confirmationAction) { Button(model.t("done")) { showMoney = false } } }
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button { showMoney = false } label: { Image(systemName: "checkmark").font(.system(size: 17, weight: .semibold)) }
+                .accessibilityLabel(model.t("done")) } }
         }
     }
 

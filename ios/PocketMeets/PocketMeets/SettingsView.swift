@@ -17,6 +17,9 @@ struct SettingsView: View {
                 Toggle(isOn: bind(\.dot_matrix)) { settingLabel("circle.grid.3x3", model.t("dot_matrix_label")) }
                 Toggle(isOn: bind(\.follow_system_sleep)) { settingLabel("sun.max", model.t("keep_display_lit")) }
                 Toggle(isOn: bind(\.screenshots)) { settingLabel("camera", model.t("screenshots_label")) }
+                if #available(iOS 18.0, *) {
+                    Toggle(isOn: $liveTranslation) { settingLabel("text.viewfinder", ocrTitle) }
+                }
             }
             Section(model.t("settings_sound")) {
                 Toggle(isOn: soundOn) { settingLabel("speaker.wave.2", model.t("sound_label")) }
@@ -27,9 +30,6 @@ struct SettingsView: View {
                 Toggle(isOn: pauseBinding) { settingLabel("pause.circle", model.t("pause_care")) }
                 Toggle(isOn: bind(\.fast_keys)) { settingLabel("bolt", model.t("fast_keys_label")) }
                     .disabled(!model.engine.usesSweetsFont())
-                if #available(iOS 18.0, *) {
-                    Toggle(isOn: $liveTranslation) { settingLabel("text.viewfinder", ocrTitle) }
-                }
             }
             Section {
                 actionRow("square.and.arrow.down", model.t("save_now")) { model.notice = model.engine.saveNow() }
@@ -53,7 +53,8 @@ struct SettingsView: View {
         }
         .navigationTitle(model.t("setup_settings"))
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar { ToolbarItem(placement: .confirmationAction) { Button(model.t("done")) { model.page = .toy } } }
+        .toolbar { ToolbarItem(placement: .confirmationAction) { Button { model.page = .toy } label: { Image(systemName: "checkmark").font(.system(size: 17, weight: .semibold)) }
+                .accessibilityLabel(model.t("done")) } }
         .sheet(isPresented: $showLook) { LookSheet() }
         .fileImporter(isPresented: $importingSave, allowedContentTypes: [.data]) { result in
             guard case let .success(url) = result else { return }
@@ -252,23 +253,19 @@ struct LookSheet: View {
             Form {
                 Section {
                     lookRow(model.t("appearance_shell"), 0)
-                    lookRow(model.t("appearance_minimal"), 1)
-                    lookRow(model.t("small_mode"), 2)
                     lookRow(model.t("appearance_night"), 3)
+                    lookRow(model.t("appearance_minimal"), 1)
                     lookRow(model.t("appearance_minimal_night"), 4)
+                    lookRow(model.t("small_mode"), 2)
                     Toggle(isOn: autoAppearance) {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(model.t("appearance_auto"))
-                            Text(model.t("appearance_auto_hint"))
-                                .font(.footnote)
-                                .foregroundStyle(.secondary)
-                        }
+                        Text(model.t("appearance_auto"))
                     }
                 }
             }
             .navigationTitle(model.t("help_look_title"))
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .confirmationAction) { Button(model.t("done")) { dismiss() } } }
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button { dismiss() } label: { Image(systemName: "checkmark").font(.system(size: 17, weight: .semibold)) }
+                .accessibilityLabel(model.t("done")) } }
         }
     }
 
@@ -276,8 +273,8 @@ struct LookSheet: View {
         Binding(get: { model.prefs.appearance_auto }, set: { on in
             var next = model.prefs
             next.appearance_auto = on
-            // Following the system only means something for the two looks
-            // that have a light and a dark form.
+            // Following the system only means something for looks that have
+            // a light and a dark form.
             if on && ![0, 1, 3, 4].contains(next.appearance) {
                 next.appearance = 0
             }
@@ -301,7 +298,9 @@ struct LookSheet: View {
                     Image(systemName: "checkmark")
                 }
             }
+            .contentShape(Rectangle())
         }
+        .buttonStyle(.plain)
     }
 }
 
@@ -323,7 +322,8 @@ struct CareSheet: View {
             }
             .navigationTitle(model.t("help_care_title"))
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .confirmationAction) { Button(model.t("done")) { dismiss() } } }
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button { dismiss() } label: { Image(systemName: "checkmark").font(.system(size: 17, weight: .semibold)) }
+                .accessibilityLabel(model.t("done")) } }
         }
     }
 }
