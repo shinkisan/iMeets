@@ -73,4 +73,4 @@ iMeets 是独立项目。Tamagotchi、Meets、On 及相关商标与美术资源�
 
 ## 协议
 
-模拟器内核为 MIT（Copyright (c) 2026 oreo-fox，见 [third_party/nijiiro-egg/LICENSE](third_party/nijiiro-egg/LICENSE)），外壳为 GPL-3.0。
+模拟器内核为 MIT（Copyright (c) 2026 oreo-fox，见 [third_party/nijiiro-egg/LICENSE](third_party/nijiiro-egg/LICENSE)），外壳为 GPL-3.0（见 [LICENSE](LICENSE)）。
