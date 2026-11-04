@@ -54,8 +54,8 @@ struct SettingsView: View {
         }
         .navigationTitle(model.t("setup_settings"))
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar { ToolbarItem(placement: .confirmationAction) { Button { model.page = .toy } label: { Image(systemName: "checkmark").font(.system(size: 17, weight: .semibold)) }
-                .accessibilityLabel(model.t("done")) } }
+        .toolbar { ToolbarItem(placement: .cancellationAction) { Button { model.page = .toy } label: { Image(systemName: "chevron.backward").font(.system(size: 17, weight: .semibold)) }
+                .accessibilityLabel(model.t("back")) } }
         .sheet(isPresented: $showLook) { LookSheet() }
         .fileImporter(isPresented: $importingSave, allowedContentTypes: [.data]) { result in
             guard case let .success(url) = result else { return }
