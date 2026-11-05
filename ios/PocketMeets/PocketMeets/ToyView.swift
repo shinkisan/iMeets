@@ -5,6 +5,7 @@ struct ToyView: View {
     @EnvironmentObject private var model: AppModel
     @Environment(\.colorScheme) private var colorScheme
     @State private var exitStart: Date?
+    @State private var confirmLanDisconnect = false
     @State private var downKeys: Set<Int> = []
     @State private var flashActive = false
     @AppStorage("pm.liveTranslation") private var liveTranslation = false
@@ -57,6 +58,10 @@ struct ToyView: View {
         }
         .navigationBarHidden(true)
         .sheet(isPresented: $model.showLan) { LanView() }
+        .alert("断开连接？", isPresented: $confirmLanDisconnect) {
+            Button("断开", role: .destructive) { model.lan.stop() }
+            Button("取消", role: .cancel) {}
+        }
         .background(KeyCatcher { name, down in
             guard let index = keyIndex(name) else { return }
             if down {
@@ -409,7 +414,13 @@ struct ToyView: View {
     }
 
     private var lanButton: some View {
-        Button { model.showLan = true } label: {
+        Button {
+            if model.lan.connected {
+                confirmLanDisconnect = true
+            } else {
+                model.showLan = true
+            }
+        } label: {
             if model.lan.connected {
                 HStack(spacing: 6) {
                     Circle().fill(Color.green).frame(width: 7, height: 7)
