@@ -68,6 +68,7 @@ fn main() {
     let a_opt: usize = std::env::args().nth(5).map(|v| v.parse().unwrap()).unwrap_or(2);
     let b_opt: usize = std::env::args().nth(6).map(|v| v.parse().unwrap()).unwrap_or(0);
     let lead: f64 = std::env::args().nth(7).map(|v| v.parse().unwrap()).unwrap_or(0.5);
+    let decline: bool = std::env::args().nth(8).as_deref() == Some("decline");
     let mut a = Session::open_care(Path::new(&rom), Path::new(&a_dir), false).unwrap();
     let mut b = Session::open_care(Path::new(&rom), Path::new(&b_dir), false).unwrap();
     hour_now(&mut a, hour);
@@ -155,6 +156,14 @@ fn main() {
         b.machine.sys.uart_receive(*byte);
     }
 
+    let cap = std::env::var("IRCAP_DIR").ok();
+    let cancel_at: Option<usize> = std::env::var("IRCANCEL_AT").ok().and_then(|v| v.parse().ok());
+    let drop_every: Option<usize> = std::env::var("IRDROP_EVERY").ok().and_then(|v| v.parse().ok());
+    let drop_at: Option<usize> = std::env::var("IRDROP_AT").ok().and_then(|v| v.parse().ok());
+    let mut sent_all = 0usize;
+    let mut cap_ab: Vec<u8> = Vec::new();
+    let mut cap_ba: Vec<u8> = Vec::new();
+
     let mut px = [0u32; 16_384];
     let ticks = (secs / 0.02) as usize;
     let mut frames = 0usize;
@@ -165,15 +174,48 @@ fn main() {
         let fa = a.machine.sys.uart_take();
         let fb = b.machine.sys.uart_take();
         for x in &fa {
+            sent_all += 1;
+            if let Some(n) = drop_every {
+                if sent_all % n == 0 {
+                    continue;
+                }
+            }
+            if drop_at == Some(sent_all) {
+                eprintln!("drop byte {sent_all} A->B");
+                continue;
+            }
             b.machine.sys.uart_receive(*x);
         }
         for x in &fb {
+            sent_all += 1;
+            if let Some(n) = drop_every {
+                if sent_all % n == 0 {
+                    continue;
+                }
+            }
+            if drop_at == Some(sent_all) {
+                eprintln!("drop byte {sent_all} B->A");
+                continue;
+            }
             a.machine.sys.uart_receive(*x);
+        }
+        if cap.is_some() {
+            cap_ab.extend_from_slice(&fa);
+            cap_ba.extend_from_slice(&fb);
         }
         if !fa.is_empty() || !fb.is_empty() {
             frames += fa.len() + fb.len();
             if frames < 400 || i % 100 == 0 {
                 eprintln!("t={:5.2} A->B {:02X?} B->A {:02X?}", i as f64 * 0.02, fa, fb);
+            }
+        }
+        if let Some(c) = cancel_at {
+            if i == c {
+                eprintln!("i={i} cancel C on A");
+                let _ = a.key(2, true);
+                step(&mut a, 0.2);
+                let _ = a.key(2, false);
+                step(&mut a, 1.0);
             }
         }
         if !answered && i > 30 {
@@ -182,6 +224,12 @@ fn main() {
             if tb.contains("けっこん する") {
                 eprintln!("i={i} answer screen: {tb:?}");
                 step(&mut b, 1.0);
+                if decline {
+                    let _ = b.key(0, true);
+                    step(&mut b, 0.2);
+                    let _ = b.key(0, false);
+                    step(&mut b, 0.6);
+                }
                 let _ = b.key(1, true);
                 step(&mut b, 0.2);
                 let _ = b.key(1, false);
@@ -206,6 +254,12 @@ fn main() {
         }
     }
     eprintln!("bytes={frames}");
+    if let Some(dir) = cap {
+        let _ = std::fs::create_dir_all(&dir);
+        let _ = std::fs::write(format!("{dir}/a-to-b.bin"), &cap_ab);
+        let _ = std::fs::write(format!("{dir}/b-to-a.bin"), &cap_ba);
+        eprintln!("captured A->B={} B->A={}", cap_ab.len(), cap_ba.len());
+    }
     let _ = a.save();
     let _ = b.save();
 }
