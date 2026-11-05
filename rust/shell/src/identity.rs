@@ -101,7 +101,7 @@ mod tests {
             let Ok(rd) = std::fs::read_dir(dir) else { return };
             for ent in rd.flatten() {
                 let name = ent.file_name().to_string_lossy().to_string();
-                if name == "target" || name == ".git" || name == ".opencode" {
+                if name == "target" || name == ".git" || name == ".opencode" || name == "out" || name == "node_modules" {
                     continue;
                 }
                 let path = ent.path();

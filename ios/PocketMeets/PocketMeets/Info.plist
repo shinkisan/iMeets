@@ -43,6 +43,10 @@
 	<string>iMeets advertises as TMGC_meets so another device can send a WebMeets gift. The name is temporary.</string>
 	<key>NSBluetoothPeripheralUsageDescription</key>
 	<string>iMeets advertises as TMGC_meets so another device can send a WebMeets gift. The name is temporary.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>扫描二维码以连接另一台 iPhone。</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>需要访问本地网络，与另一台 iPhone 联机。</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>iMeets 会把游戏截图保存到「iMeets」相册。</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>

@@ -146,6 +146,9 @@ void pm_link_cancel(PmSession *s);
 int pm_link_write(PmSession *s, const unsigned char *bytes, int len);
 int pm_link_read(PmSession *s, unsigned char *out, int cap);
 
+int pm_ir_write(PmSession *s, const unsigned char *bytes, int len);
+int pm_ir_read(PmSession *s, unsigned char *out, int cap);
+
 double pm_care_sync(PmSession *s, double now_unix, double budget);
 double pm_care_at(PmSession *s);
 void pm_care_pause(PmSession *s, int paused, double now_unix);

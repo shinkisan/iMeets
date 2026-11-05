@@ -1,0 +1,56 @@
+name: iOS Simulator
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'ios/**'
+      - 'rust/shell/**'
+      - 'third_party/nijiiro-egg/**'
+      - '.github/workflows/ios-sim.yml'
+
+jobs:
+  sim:
+    runs-on: macos-14
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Rust simulator library
+        run: |
+          set -euo pipefail
+          ARCH=$(uname -m)
+          if [ "$ARCH" = "arm64" ]; then TARGET=aarch64-apple-ios-sim; else TARGET=x86_64-apple-ios; fi
+          echo "host=$ARCH target=$TARGET"
+          rustup target add "$TARGET"
+          cargo build --release --target "$TARGET" --manifest-path rust/shell/Cargo.toml
+          mkdir -p target/aarch64-apple-ios-sim/release
+          cp "target/$TARGET/release/libpocket_meets.a" target/aarch64-apple-ios-sim/release/libpocket_meets.a
+      - name: Xcode build
+        run: |
+          set -euo pipefail
+          xcodebuild -project ios/PocketMeets/PocketMeets.xcodeproj \
+            -scheme PocketMeets -configuration Debug -sdk iphonesimulator \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath "$RUNNER_TEMP/dd" \
+            CODE_SIGNING_ALLOWED=NO build
+      - name: Boot, install and launch
+        run: |
+          set -euo pipefail
+          UDID=$(xcrun simctl list devices available -j | python3 -c 'import json,sys; d=json.load(sys.stdin)["devices"]; print(next(x["udid"] for xs in d.values() for x in xs if x.get("isAvailable") and "iPhone" in x["name"]))')
+          echo "UDID=$UDID"
+          xcrun simctl boot "$UDID" || true
+          xcrun simctl bootstatus "$UDID" -b
+          APP=$(find "$RUNNER_TEMP/dd/Build/Products" -name PocketMeets.app -type d | head -1)
+          echo "APP=$APP"
+          test -d "$APP"
+          xcrun simctl install "$UDID" "$APP"
+          xcrun simctl launch "$UDID" app.pocketmeets.ios
+          sleep 5
+          xcrun simctl io "$UDID" screenshot "$RUNNER_TEMP/sim.png"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: simulator
+          path: ${{ runner.temp }}/sim.png

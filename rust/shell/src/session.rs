@@ -10,6 +10,7 @@
 //! return 1, and do not open BLE or Mixing. A hosted route (return 2) runs
 //! only when a classification is already latched inside this crate.
 
+use std::collections::VecDeque;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -122,6 +123,8 @@ pub struct Session {
     pub audio_t: f64,
     /// Firmware PCM waiting for a visible tick. Hidden ticks drop it.
     pub pending_pcm: Vec<i16>,
+    /// Infrared bytes drained for an app-side transport.
+    pub ir_pending: VecDeque<u8>,
     pub rewind: Option<Snapshot>,
     pub rewind_at: f64,
     pub take_call: bool,
@@ -174,6 +177,7 @@ impl Session {
             calls: CallDetector::default(),
             audio_t: 0.0,
             pending_pcm: Vec::new(),
+            ir_pending: VecDeque::new(),
             rewind: None,
             rewind_at: -REWIND_GAP,
             take_call: false,
@@ -894,6 +898,25 @@ impl Session {
         self.link.read(out)
     }
 
+    /// Feed bytes from an app-side infrared transport into the firmware.
+    pub fn ir_write(&mut self, bytes: &[u8]) {
+        for &b in bytes {
+            self.machine.sys.uart_receive(b);
+        }
+    }
+
+    /// Drain firmware infrared output for an app-side transport.
+    pub fn ir_read(&mut self, out: &mut [u8]) -> i32 {
+        if self.ir_pending.is_empty() {
+            self.ir_pending.extend(self.machine.sys.uart_take());
+        }
+        let n = out.len().min(self.ir_pending.len());
+        for slot in out.iter_mut().take(n) {
+            *slot = self.ir_pending.pop_front().unwrap();
+        }
+        n as i32
+    }
+
     pub fn refuse_shelf(&self) -> Result<(), String> {
         if let Some(msg) = shelf::refuse(self.link.state, self.catching_up, self.care.paused) {
             Err(msg.into())
@@ -1228,6 +1251,15 @@ mod tests {
         let muted = PumpIn { muted: true, visible: false, ..PumpIn::default() };
         assert_eq!(if muted.muted { 0.0 } else { 1.0 }, 0.0);
         assert!(s.take_call);
+    }
+
+    #[test]
+    fn ir_bytes_roundtrip() {
+        let mut s = Session::bare(vec![0; 8 * 1024 * 1024]);
+        s.ir_pending.extend([1, 2, 3, 4]);
+        let mut out = [0u8; 8];
+        let n = s.ir_read(&mut out);
+        assert_eq!(&out[..n as usize], &[1, 2, 3, 4]);
     }
 
     #[test]

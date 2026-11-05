@@ -48,6 +48,21 @@ struct RootView: View {
         .sheet(isPresented: $model.showLanguage) {
             LanguageView()
         }
+        .overlay(alignment: .top) {
+            if model.lan.connected {
+                HStack(spacing: 8) {
+                    Circle().fill(Color.green).frame(width: 7, height: 7)
+                    Text("联机中")
+                    Button("断开") { model.lan.stop() }
+                }
+                .font(.caption.weight(.medium))
+                .padding(.horizontal, 14)
+                .padding(.vertical, 8)
+                .pmGlassCard(18, fallback: .ultraThinMaterial)
+                .padding(.top, 8)
+            }
+        }
+        .animation(.spring(response: 0.32, dampingFraction: 0.86), value: model.lan.connected)
         .overlay(alignment: .bottom) {
             if !model.notice.isEmpty {
                 Text(model.notice)

@@ -547,6 +547,27 @@ pub extern "C" fn pm_link_read(p: *mut Session, out: *mut u8, cap: i32) -> i32 {
 }
 
 #[no_mangle]
+pub extern "C" fn pm_ir_write(p: *mut Session, bytes: *const u8, len: i32) -> i32 {
+    let Some(s) = session(p) else { return -1 };
+    if bytes.is_null() || len <= 0 {
+        return -1;
+    }
+    let slice = unsafe { std::slice::from_raw_parts(bytes, len as usize) };
+    s.ir_write(slice);
+    0
+}
+
+#[no_mangle]
+pub extern "C" fn pm_ir_read(p: *mut Session, out: *mut u8, cap: i32) -> i32 {
+    let Some(s) = session(p) else { return -1 };
+    if out.is_null() || cap <= 0 {
+        return -1;
+    }
+    let slice = unsafe { std::slice::from_raw_parts_mut(out, cap as usize) };
+    s.ir_read(slice)
+}
+
+#[no_mangle]
 pub extern "C" fn pm_care_sync(p: *mut Session, now: f64, budget: f64) -> f64 {
     session(p).map(|s| s.care_sync(now, budget)).unwrap_or(-1.0)
 }

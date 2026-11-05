@@ -444,6 +444,32 @@ final class Engine {
         }
     }
 
+    /// Feed bytes received from the app-side infrared transport.
+    func irWrite(_ bytes: [UInt8]) {
+        queue.sync {
+            guard let session, !bytes.isEmpty else { return }
+            bytes.withUnsafeBufferPointer { raw in
+                if let base = raw.baseAddress {
+                    _ = pm_ir_write(session, base, Int32(bytes.count))
+                }
+            }
+        }
+    }
+
+    /// Drain firmware infrared output for the app-side transport.
+    func irRead() -> [UInt8] {
+        queue.sync {
+            guard let session else { return [] }
+            var buffer = [UInt8](repeating: 0, count: 512)
+            let n = buffer.withUnsafeMutableBufferPointer { raw -> Int32 in
+                guard let base = raw.baseAddress else { return 0 }
+                return pm_ir_read(session, base, 512)
+            }
+            if n <= 0 { return [] }
+            return Array(buffer.prefix(Int(n)))
+        }
+    }
+
     func frame() -> [UInt32] {
         queue.sync { pullFrame() }
     }

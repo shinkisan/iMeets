@@ -7,6 +7,7 @@ struct SettingsView: View {
     @State private var importingSave = false
     @State private var confirmDelete = false
     @State private var showLook = false
+    @State private var showLan = false
     @ScaledMetric(relativeTo: .body) private var iconColumn: CGFloat = 22
     @AppStorage("pm.liveTranslation") private var liveTranslation = false
 
@@ -30,6 +31,7 @@ struct SettingsView: View {
                 Toggle(isOn: pauseBinding) { settingLabel("pause.circle", model.t("pause_care")) }
                 Toggle(isOn: bind(\.fast_keys)) { settingLabel("bolt", model.t("fast_keys_label")) }
                     .disabled(!model.engine.usesSweetsFont())
+                actionRow("wifi", model.prefs.language == "zh" ? "局域网联机" : "LAN Link") { showLan = true }
             }
             Section {
                 actionRow("square.and.arrow.down", model.t("save_now")) { model.notice = model.engine.saveNow() }
@@ -56,6 +58,7 @@ struct SettingsView: View {
         .toolbar { ToolbarItem(placement: .cancellationAction) { Button { model.page = .toy } label: { Image(systemName: "chevron.backward").font(.system(size: 17, weight: .semibold)) }
                 .accessibilityLabel(model.t("back")) } }
         .sheet(isPresented: $showLook) { LookSheet() }
+        .sheet(isPresented: $showLan) { LanView() }
         .fileImporter(isPresented: $importingSave, allowedContentTypes: [.data]) { result in
             guard case let .success(url) = result else { return }
             guard let path = model.copyFile(from: url, name: "incoming.t18s") else {

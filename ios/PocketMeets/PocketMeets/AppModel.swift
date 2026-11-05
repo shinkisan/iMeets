@@ -1,4 +1,5 @@
 import BackgroundTasks
+import Combine
 import SwiftUI
 import UserNotifications
 
@@ -18,6 +19,7 @@ enum AppPage: Equatable {
 @MainActor
 final class AppModel: ObservableObject {
     let engine = Engine()
+    let lan = LanLink()
     @Published var page: AppPage = .setup
     @Published var prefs = Prefs()
     @Published var notice = "" {
@@ -49,9 +51,14 @@ final class AppModel: ObservableObject {
     @Published var showLanguage = false
     private var heart: Timer?
     private var noticeTask: Task<Void, Never>?
+    private var lanCancel: AnyCancellable?
     private var cameFromBackground = false
 
     init() {
+        lan.engine = engine
+        lanCancel = lan.objectWillChange.sink { [weak self] _ in
+            Task { @MainActor in self?.objectWillChange.send() }
+        }
         engine.onFrame = { [weak self] pixels, asleep in
             self?.pixels = pixels
             self?.asleep = asleep
