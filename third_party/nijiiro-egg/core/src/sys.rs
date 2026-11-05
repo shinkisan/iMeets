@@ -324,10 +324,10 @@ pub struct System {
     pub uart_is_ram: bool,
     /// Log UART register accesses (debug only).
     pub uart_trace: bool,
-    /// Edge-triggered transmit interrupt (debug model).
-    pub uart_tx_irq: bool,
     /// Next emulated time a transmit interrupt may be raised.
     pub uart_tx_next: f64,
+    /// Emulated time of the most recent transmit byte (0 = none yet).
+    pub uart_tx_last: f64,
     /// Force the UART status word (debug only).
     pub uart_force: Option<u32>,
     /// Force the UART interrupt-flag word (debug only).
@@ -410,8 +410,8 @@ impl System {
             uart_tx: std::collections::VecDeque::new(),
             uart_is_ram: false,
             uart_trace: false,
-            uart_tx_irq: false,
             uart_tx_next: 0.0,
+            uart_tx_last: 0.0,
             uart_force: None,
             uart_flags: None,
             watch_write: None,
@@ -1122,11 +1122,16 @@ impl System {
         if let Some(v) = self.uart_force {
             return v;
         }
-        if self.uart_rx.is_empty() {
+        // Bit 0x80 is the transmitter's "line idle after a frame" flag: the
+        // IR driver uses it to switch the port back to receive once a frame
+        // has been shifted out.
+        let done = self.uart_tx_last > 0.0 && self.now >= self.uart_tx_last + 0.0005;
+        let base = if self.uart_rx.is_empty() {
             0x6000 | 0x0010
         } else {
             0x6000 | 0x8000
-        }
+        };
+        base | if done { 0x0080 } else { 0 }
     }
 
     fn uart_read(&mut self, off: u32, size: u32) -> u32 {
@@ -1161,20 +1166,14 @@ impl System {
         let old = u32::from_le_bytes([self.uart[i], self.uart[i + 1], self.uart[i + 2], self.uart[i + 3]]);
         let new = (old & !mask) | ((val << sh) & mask);
         match word {
-            0x00 => self.uart_tx.push_back((new & 0xff) as u8),
-            0x08 => {
-                if new & 0x4000 != 0 && old & 0x4000 == 0 {
-                    self.uart_tx_irq = true;
-                }
-                self.uart[i..i + 4].copy_from_slice(&new.to_le_bytes());
+            0x00 => {
+                self.uart_tx.push_back((new & 0xff) as u8);
+                self.uart_tx_last = self.now;
             }
+            0x08 => self.uart[i..i + 4].copy_from_slice(&new.to_le_bytes()),
             0x10 => {}
             _ => self.uart[i..i + 4].copy_from_slice(&new.to_le_bytes()),
         }
-    }
-
-    pub fn clear_uart_tx_irq(&mut self) {
-        self.uart_tx_irq = false;
     }
 
     /// Feed one byte from the other toy's infrared port.
