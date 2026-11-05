@@ -489,6 +489,57 @@ B: おめでとう！
 | 真机 | 没有实体机，全部是模拟器双会话 |
 
 
+## 局域网（TCP）调试
+
+本地已经用 **纯 TCP** 跑通两台模拟器，不经过 HTTP 请求/响应。一个进程做
+host，一个进程做 join，两边各自跑原版固件，只把 UART 字节通过 socket 转发。
+
+```sh
+# 终端 1
+POCKET_MEETS_ROM=... irlan host /tmp/lan-a 47000 35 10 0
+
+# 终端 2
+POCKET_MEETS_ROM=... irlan join /tmp/lan-b 47000 35 10 0
+```
+
+参数：`<role> <save> <port> <seconds> <hour> [option]`，`option` 0 是
+`あそぶ`，2 是 `プロポーズ`（host 主动，join 等待并自动回答 `する`）。
+
+### 关键实现
+
+1. **控制握手**：连接后先交换 `TAMA-LAN 1`，然后双方各自导航到
+   `みーつ` 子菜单；到 `つうしん たいき…` 后交换 `WAIT`，host 发 `GO`。
+2. **tick barrier**：每 20 ms 一步，双方各发一个 `tick` 帧，收到对方的
+   `tick` 才进入下一步。这样两个独立进程的模拟时间保持锁步；否则一边跑
+   得快、一边跑得慢，IR 固件会超时。
+3. **仿真时间 lead**：host 在第二次 B 之后多 `step(0.5)`；join 不额外
+   step。注意这必须是**仿真时间**，不能只用 wall-clock sleep。最早版本
+   只错开墙钟，结果 315 字节后一直重发；改成仿真时间 0.5 s 后立刻变成
+   正常的 120 KB 访问。
+4. **帧格式**：`[type: u8][len: u16 LE][payload]`；`type 0` 是 UART 字节，
+   `type 1` 是 tick。TCP 保证顺序，不需要给每个字节编号。
+
+### 实测
+
+| 流程 | A→B | B→A | 结果 |
+|---|---|---|---|
+| `あそぶ` | 66,717 | 53,686 | 完成访问，join 端 `おでかけ ちゅう` |
+| `プロポーズ` | 85,167 | 86,000 | join 端 `おめでとう！`，host `おでかけ ちゅう` |
+
+这两组字节数和本地同进程桥接完全一致（本地 `あそぶ` 同样是
+66,717 / 53,686），说明 TCP 传输没有改变固件看到的数据。
+
+### iOS 落地建议
+
+- 用 `Network.framework` 的 `NWListener` / `NWConnection` 跑 TCP，不要用
+  `URLSession` 的 HTTP 请求；二维码可以不做，host 显示 IP:端口即可。
+- 两端都前台时最稳；后台会挂起 socket。
+- 先保留这个 `irlan` 作为桌面回归测试：每次改传输层，都能和本地同进程
+  桥接的字节数对比。
+- 以后要离线，再把 `MultipeerConnectivity` 或 BLE 接到同一个“字节流 +
+  tick barrier”接口下面。
+
+
 ## 限制
 
 - 只在 Sweets v062 上验证；其他版本的状态偏移和链路参数可能不同。

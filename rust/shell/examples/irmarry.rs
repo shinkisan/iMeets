@@ -173,6 +173,9 @@ fn main() {
         step(&mut b, 0.02);
         let fa = a.machine.sys.uart_take();
         let fb = b.machine.sys.uart_take();
+        if i < 5 {
+            eprintln!("i={i} nowA={:.2} nowB={:.2} fa={} fb={} firstA={:02X?} firstB={:02X?}", a.machine.now(), b.machine.now(), fa.len(), fb.len(), &fa[..fa.len().min(12)], &fb[..fb.len().min(12)]);
+        }
         for x in &fa {
             sent_all += 1;
             if let Some(n) = drop_every {
