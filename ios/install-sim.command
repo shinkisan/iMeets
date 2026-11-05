@@ -9,15 +9,17 @@ cd "$(dirname "$0")/.."
 DEVICE=${DEVICE:-iPhone 16}
 BUNDLE=app.pocketmeets.ios
 DD=${DD:-$HOME/derived-tama-sim}
-case "$(uname -m)" in
-  arm64) TARGET=aarch64-apple-ios-sim ;;
-  *)     TARGET=x86_64-apple-ios ;;
-esac
-
-echo "== rust $TARGET =="
-rustup target list --installed | grep -qx "$TARGET" || rustup target add "$TARGET"
-cargo build --release --target "$TARGET" \
-  --manifest-path rust/shell/Cargo.toml --offline
+echo "== rust simulator library =="
+rustup target add aarch64-apple-ios-sim x86_64-apple-ios
+cargo build --release --target aarch64-apple-ios-sim \
+  --manifest-path rust/shell/Cargo.toml
+cargo build --release --target x86_64-apple-ios \
+  --manifest-path rust/shell/Cargo.toml
+lipo -create \
+  target/aarch64-apple-ios-sim/release/libpocket_meets.a \
+  target/x86_64-apple-ios/release/libpocket_meets.a \
+  -output "$TMPDIR/libpocket_meets.a"
+cp "$TMPDIR/libpocket_meets.a" target/aarch64-apple-ios-sim/release/libpocket_meets.a
 
 echo "== xcode =="
 xcodebuild -project ios/PocketMeets/PocketMeets.xcodeproj \
