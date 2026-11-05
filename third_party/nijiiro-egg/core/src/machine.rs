@@ -75,6 +75,8 @@ pub struct Machine {
     pub pc_trace_left: u32,
     /// Extra SRAM word printed with each PC-trace hit (debug only).
     pub trace_word: Option<u32>,
+    /// Also dump this many bytes at r0 on a PC-trace hit (debug only).
+    pub trace_r0: Option<u32>,
     /// Woken by the RTC alarm (the once-a-minute update while asleep), not
     /// by a button: the backlight stays off, though the game may draw and
     /// beep (care calls). Cleared by the app when a button is pressed.
@@ -197,6 +199,7 @@ impl Machine {
             pc_trace: None,
             pc_trace_left: 0,
             trace_word: None,
+            trace_r0: None,
             alarm_wake: false,
             bluetooth_used: false,
             ble_failed: false,
@@ -498,6 +501,13 @@ impl Machine {
                     let slot = self.sys.peek32(sp.wrapping_add(4));
                     let extra = self.trace_word.map(|a| self.sys.peek32(a)).unwrap_or(0);
                     eprintln!("[pc] {:08X} lr={:08X} cpsr={:08X} r0={:08X} slot={:08X} extra={:08X}", pc, self.cpu.r[14], self.cpu.cpsr, self.cpu.r[0], slot, extra);
+                    if let Some(n) = self.trace_r0 {
+                        let mut v = Vec::with_capacity(n as usize);
+                        for i in 0..n {
+                            v.push(self.sys.peek8(self.cpu.r[0].wrapping_add(i)));
+                        }
+                        eprintln!("     r0[{n}] {:02X?}", v);
+                    }
                     self.pc_trace_left -= 1;
                 }
             }

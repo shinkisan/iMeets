@@ -21,6 +21,15 @@ fn main() {
     let app = 0x11A5Cusize;
     s.machine.sys.sram[app+0x24..app+0x28].copy_from_slice(&0xF8013F00u32.to_le_bytes());
     s.machine.sys.sram[app+0x28..app+0x2C].copy_from_slice(&1u32.to_le_bytes());
+    // Enable the packet callback gate: [game_state+0xF00] = 1.
+    let rd0 = u32::from_le_bytes(s.machine.sys.sram[0x10208..0x1020C].try_into().unwrap()) as usize;
+    if rd0 >= 0xF8000000 {
+        let b = rd0 - 0xF8000000;
+        s.machine.sys.sram[b + 0xF00] = 1;
+        let v: u32 = std::env::args().nth(2).and_then(|x| x.parse().ok()).unwrap_or(1);
+        s.machine.sys.sram[b + 0x2C..b + 0x30].copy_from_slice(&v.to_le_bytes());
+        println!("gate f00=1 +2c={v}");
+    }
     let tab: Vec<u16> = (0..256).map(|i| { let mut c=i as u16; for _ in 0..8 { c = if c&1!=0 {(c>>1)^0x8408} else {c>>1}; } c }).collect();
     let mut p = vec![0xFEu8]; p.extend(std::iter::repeat(0).take(21));
     let mut crc=0xFFFFu16; for &x in &p { crc=(crc>>8)^tab[((crc^x as u16)&0xFF) as usize]; }
