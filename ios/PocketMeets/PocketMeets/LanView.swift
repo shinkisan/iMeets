@@ -9,15 +9,32 @@ struct LanView: View {
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 18) {
+            VStack(spacing: 16) {
                 if let qr = model.lan.qr {
                     Image(uiImage: qr)
                         .interpolation(.none)
                         .resizable()
-                        .frame(width: 260, height: 260)
+                        .scaledToFit()
+                        .frame(width: 240, height: 240)
+                        .padding(16)
+                        .background(Color.white)
+                        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                                .stroke(Color.primary.opacity(0.06), lineWidth: 0.5)
+                        )
+                        .shadow(color: .black.opacity(0.10), radius: 18, y: 6)
+                        .accessibilityLabel("红外联机二维码")
+
+                    Text("让另一台 iPhone 扫描二维码")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
                 } else {
                     ProgressView()
-                        .frame(width: 260, height: 260)
+                        .frame(width: 240, height: 240)
+                    Text("正在准备二维码…")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
                 }
 
                 if model.lan.connected {
@@ -26,6 +43,10 @@ struct LanView: View {
                         .foregroundStyle(.secondary)
                     Button("断开") { model.lan.stop() }
                 } else {
+                    Text("或")
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+
                     Button {
                         scanning = true
                     } label: {
@@ -33,9 +54,19 @@ struct LanView: View {
                             .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(.bordered)
+                    .controlSize(.large)
 
+                    if case .hosting = model.lan.mode {
+                        HStack(spacing: 6) {
+                            ProgressView().controlSize(.small)
+                            Text("等待扫码")
+                        }
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    }
                     if case .joining = model.lan.mode {
-                        ProgressView()
+                        ProgressView("正在连接…")
+                            .font(.caption)
                     }
                     if case .failed(let message) = model.lan.mode {
                         Text(message)
@@ -78,8 +109,12 @@ struct LanView: View {
                     dismiss()
                 }
             }
+            .onDisappear {
+                if !model.lan.connected {
+                    model.lan.stop()
+                }
+            }
         }
-        .interactiveDismissDisabled()
     }
 }
 
