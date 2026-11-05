@@ -33,6 +33,13 @@ fn main() {
         a.machine.sys.uart[8..12].copy_from_slice(&0xF070u32.to_le_bytes());
         b.machine.sys.uart[8..12].copy_from_slice(&0xF070u32.to_le_bytes());
         step(&mut a, 0.02); step(&mut b, 0.02);
+        if i == 50 {
+            let ra = u32::from_le_bytes(a.machine.sys.sram[0x10208..0x1020C].try_into().unwrap()) as usize;
+            let rb = u32::from_le_bytes(b.machine.sys.sram[0x10208..0x1020C].try_into().unwrap()) as usize;
+            if ra >= 0xF8000000 { a.machine.sys.sram[ra-0xF8000000+0x2C..ra-0xF8000000+0x30].copy_from_slice(&1u32.to_le_bytes()); }
+            if rb >= 0xF8000000 { b.machine.sys.sram[rb-0xF8000000+0x2C..rb-0xF8000000+0x30].copy_from_slice(&1u32.to_le_bytes()); }
+            println!("set 2c=1");
+        }
         let fa = a.machine.sys.uart_take(); let fb = b.machine.sys.uart_take();
         if !fa.is_empty() { for x in &fa { b.machine.sys.uart_receive(*x); } }
         if !fb.is_empty() { for x in &fb { a.machine.sys.uart_receive(*x); } }
