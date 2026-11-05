@@ -20,6 +20,7 @@ fn main() {
     let rom = std::env::var("POCKET_MEETS_ROM").expect("POCKET_MEETS_ROM");
     let base = std::env::args().nth(1).expect("save");
     let hours: f64 = std::env::args().nth(2).map(|v| v.parse().unwrap()).unwrap_or(24.0);
+    let alarm_secs: f64 = std::env::args().nth(3).map(|v| v.parse().unwrap()).unwrap_or(60.0);
     let mut s = Session::open_care(Path::new(&rom), Path::new(&base), false).unwrap();
     step(&mut s, 2.0);
     let start = s.care_at();
@@ -29,7 +30,7 @@ fn main() {
     s.machine.sys.rtc.base_time = s.machine.sys.game_time;
     s.machine.sys.rtc_irq.tod_base = ((start as i64) % 86_400).rem_euclid(86_400);
     s.machine.sys.rtc_irq.tod_set_at = s.machine.sys.game_time;
-    let alarm = s.machine.sys.rtc.ticks(s.machine.sys.game_time) + 60 * 32768;
+    let alarm = s.machine.sys.rtc.ticks(s.machine.sys.game_time) + (alarm_secs * 32768.0) as i64;
     for i in 0..6 {
         s.machine.sys.rtc.regs[0x20 + i] = ((alarm >> (8 * i)) & 0xff) as u8;
     }
