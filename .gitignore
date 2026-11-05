@@ -41,3 +41,4 @@ tools/fixtures/*
 
 # local LAN demo artifacts
 /tools/lan-demo/out/
+AGENTS.md
