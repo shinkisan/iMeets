@@ -221,11 +221,12 @@ POCKET_MEETS_ROM=... cargo run --release --example irforward -- <save> 48
 
 - 婴儿 → `やきマシュっち`（1 才）→ `めっとっち`（2 才）→ `ござるっち`（3 才）；
 - 24 小时一跳会死；6 小时一段能活；
-- `あいじょー` 条一直是空的，连续几天后仍会死，可能还需要玩耍/零食来提升亲密度。
+- `あいじょー` 条不会自己涨。`たからばこ` → `ボール` / `ぬいぐるみ` → `つかう` 可以玩耍；实测 1 次约 1 格，5 次约 2 格，还需要更多玩耍/零食才能填满。
+- 亲密度低时，3 才档连续 3 段（18 小时）还能活，第 4 段会死。
 
 工具：
 
-- `ircare3 <save> feed|med|clean|propose`：喂食、治病、清理、进入求婚菜单；
+- `ircare3 <save> feed|med|clean|bath|play|propose`：喂食、治病、清理、洗澡、玩玩具、进入求婚菜单；
 - `irsnack <save>`：去餐厅吃到饱；
 - `irshot2 <save>`：把当前画面存成 `/tmp/boot.rgb`（再转 PNG 可看是不是墓碑）；
 - `irhearts <save>`：打开状态页，看爱心/亲密度。
