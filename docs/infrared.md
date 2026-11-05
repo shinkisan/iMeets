@@ -180,6 +180,32 @@ cargo run --release --example irpair -- /tmp/save-a /tmp/save-b
 - 婴儿档是 `0G`，儿童档是 `300G`；买食物/礼物需要先让宠物在白天清醒，或准备一个带物品的存档。
 
 
+
+### 带 RTC alarm 的补时
+
+只把 `care_sync` 跑起来并不会让游戏日历前进：游戏自己的日期副本（`0xBE30`）只在它“醒来/冷启动”时刷新。补时里如果 RTC alarm 没有armed，`power_cycle` 不会发生，日历就停在原处。
+
+把 RTC alarm 设成 60 秒后并打开使能位后，补时会按分钟冷启动，日历才会翻页：
+
+- `0x20..0x25`：alarm 计数（48 位，小端）
+- `0x40`：使能，`& 6 != 0`
+
+实测：
+
+- 儿童 `やきマシュっち`，1 才；
+- 48 小时带 alarm 的补时后变成 `めっとっち`，2 才。
+
+对应工具：
+
+```sh
+POCKET_MEETS_ROM=... cargo run --release --example iralarm -- <save> 48
+POCKET_MEETS_ROM=... cargo run --release --example irforward -- <save> 48
+```
+
+`iralarm` 回放当前 `care_at` 之前的一段，`irforward` 从 `care_at` 往后回放。两者都会写回存档，可以按不同天数切出不同年龄的存档。
+
+目前卡在下一步：2 才的 `めっとっち` 存档启动后停在个人资料页，A 键只能打开资料/状态页，暂时回不到主菜单，所以还没法进 `みーつ → プロポーズ`。另外，继续进化可能还需要每天喂食/治病/清理，而不只是时间。
+
 ### 存档层（Sweets v062）
 
 为了准备礼物/结婚测试，定位了几个 SRAM 字段（偏移相对 `0xF8000000`）：
