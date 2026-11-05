@@ -339,7 +339,8 @@ B: おめでとう！
 
 - 交换了 171,310 字节的红外帧（含 `TMGC` OBEX 数据）；
 - B 回到房间后手里抱着一颗蛋，婚姻成立；
-- 稳定存档：`/tmp/female-married`、`/tmp/male-married`；截图 `/tmp/female-married.png`。
+- 稳定存档：`/tmp/female-married`、`/tmp/male-married`；
+- 截图：`/tmp/marriage-happy.png`（两人同框）、`/tmp/marriage-congrats.png`（おめでとう！）、`/tmp/marriage-egg.png`（雌性抱蛋）。
 
 **时序要点**：两台设备的第二次 B 必须错开。两边同时开始时会在 `つうしん ちゅう` 之后直接 `つうしん しっぱい`（断开的爱心）；先让 A 开始 0.5 秒，再让 B 开始，才能完成交换。这个 `lead` 是 `irmarry` 的第 7 个参数。
 
