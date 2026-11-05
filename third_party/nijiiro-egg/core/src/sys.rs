@@ -47,6 +47,8 @@ pub const SPI2_IDLE: u32 = 0x00;
 pub const RTC_BUS: u32 = 0xC009_0000;
 pub const ADC_BASE: u32 = 0xC00C_0000;
 pub const ADC_IRQ: u32 = 29;
+/// The infrared serial port shares the UART interrupt line.
+pub const UART_IRQ: u32 = 14;
 pub const ADC_BATTERY: u32 = 0xC000;
 pub const SPIFC_BASE: u32 = 0xC015_0000;
 pub const POWER_REG: u32 = 0xD000_0078;
@@ -315,7 +317,13 @@ pub struct System {
     pub sram: Vec<u8>,
     pub gpio: Vec<u8>,
     pub uart: Vec<u8>,
+    /// Bytes the virtual IR partner sent to this toy.
+    pub uart_rx: std::collections::VecDeque<u8>,
+    /// Bytes this toy sent to the virtual IR partner.
+    pub uart_tx: std::collections::VecDeque<u8>,
     pub uart_is_ram: bool,
+    /// Log UART register accesses (debug only).
+    pub uart_trace: bool,
     /// Zero pages mapped on demand for stray accesses (64 KiB each).
     pub extra: HashMap<u32, Vec<u8>>,
     pub unmapped: Vec<(u32, u32)>,
@@ -382,7 +390,10 @@ impl System {
             sram: vec![0; SRAM_SIZE],
             gpio: vec![0; GPIO_SIZE],
             uart: vec![0; UART_SIZE],
+            uart_rx: std::collections::VecDeque::new(),
+            uart_tx: std::collections::VecDeque::new(),
             uart_is_ram: false,
+            uart_trace: false,
             extra: HashMap::new(),
             unmapped: Vec::new(),
             regs: RegMap::default(),
@@ -737,6 +748,9 @@ impl System {
                 return *n;
             }
         }
+        if !self.uart_rx.is_empty() && (mask >> (32 - UART_IRQ)) & 1 == 0 {
+            return UART_IRQ;
+        }
         0
     }
 
@@ -859,6 +873,9 @@ impl System {
     }
 
     fn mmio_read(&mut self, addr: u32, size: u32) -> u32 {
+        if (UART_BASE..UART_BASE + UART_SIZE as u32).contains(&addr) {
+            return self.uart_read(addr - UART_BASE, size);
+        }
         if let Some(q) = self.replay_reads.as_mut() {
             return match q.pop_front() {
                 Some((a, v)) if a == addr => v,
@@ -909,6 +926,10 @@ impl System {
     }
 
     fn mmio_write(&mut self, addr: u32, size: u32, val: u32) {
+        if (UART_BASE..UART_BASE + UART_SIZE as u32).contains(&addr) {
+            self.uart_write(addr - UART_BASE, size, val);
+            return;
+        }
         self.uart_ir_access(addr);
         if self.trace_mmio {
             self.log_mmio(addr, true, val);
@@ -978,9 +999,6 @@ impl System {
             0x20 => Some((&mut self.ram, (addr - FLASH_BASE) as usize)),
             0xF8 if addr < SRAM_BASE + SRAM_SIZE as u32 => Some((&mut self.sram, (addr - SRAM_BASE) as usize)),
             0xC0 if addr < GPIO_BASE + GPIO_SIZE as u32 => Some((&mut self.gpio, (addr - GPIO_BASE) as usize)),
-            0xC0 if self.uart_is_ram && (UART_BASE..UART_BASE + UART_SIZE as u32).contains(&addr) => {
-                Some((&mut self.uart, (addr - UART_BASE) as usize))
-            }
             _ => {
                 if Self::is_mmio(addr) {
                     return None;
@@ -1032,6 +1050,66 @@ impl System {
                 m[o] = *b;
             }
         }
+    }
+
+    /// The status register the IR code polls. Bit 15 is the receive event
+    /// the IRQ handler drains, bit 4 is the FIFO-empty flag (clear while a
+    /// byte is waiting), and bit 13 is the transmit event. The layout comes
+    /// from the handler at 0xF80030F0.
+    fn uart_status(&self) -> u32 {
+        if self.uart_rx.is_empty() {
+            0x2000 | 0x0010
+        } else {
+            0x2000 | 0x8000
+        }
+    }
+
+    fn uart_read(&mut self, off: u32, size: u32) -> u32 {
+        if self.uart_trace && (off & !3) == 0x00 {
+            eprintln!("[uart r] +{:02X}", off);
+        }
+        self.uart_ir_access(UART_BASE + off);
+        let word = off & !3;
+        let saved = {
+            let i = word as usize;
+            u32::from_le_bytes([self.uart[i], self.uart[i + 1], self.uart[i + 2], self.uart[i + 3]])
+        };
+        let val = match word {
+            0x00 => self.uart_rx.pop_front().map(u32::from).unwrap_or(0),
+            0x04 => 0,
+            0x10 => self.uart_status(),
+            _ => saved,
+        };
+        let val = (val >> ((off & 3) * 8)) & if size == 4 { u32::MAX } else { (1 << (size * 8)) - 1 };
+        val
+    }
+
+    fn uart_write(&mut self, off: u32, size: u32, val: u32) {
+        if self.uart_trace {
+            eprintln!("[uart w] +{:02X} size={} val={:08X}", off, size, val);
+        }
+        self.uart_ir_access(UART_BASE + off);
+        let word = off & !3;
+        let sh = (off & 3) * 8;
+        let mask = if size == 4 { u32::MAX } else { ((1u32 << (size * 8)) - 1) << sh };
+        let i = word as usize;
+        let old = u32::from_le_bytes([self.uart[i], self.uart[i + 1], self.uart[i + 2], self.uart[i + 3]]);
+        let new = (old & !mask) | ((val << sh) & mask);
+        match word {
+            0x00 => self.uart_tx.push_back((new & 0xff) as u8),
+            0x10 => {}
+            _ => self.uart[i..i + 4].copy_from_slice(&new.to_le_bytes()),
+        }
+    }
+
+    /// Feed one byte from the other toy's infrared port.
+    pub fn uart_receive(&mut self, byte: u8) {
+        self.uart_rx.push_back(byte);
+    }
+
+    /// Take every byte this toy has sent to the infrared port.
+    pub fn uart_take(&mut self) -> Vec<u8> {
+        self.uart_tx.drain(..).collect()
     }
 
     /// Make the infrared port plain memory ("idle, nothing received").

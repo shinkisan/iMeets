@@ -68,6 +68,11 @@ pub struct Machine {
     clock_refresh: Option<u32>,
     clock_minute: Option<i64>,
     pub stop_on_bluetooth: bool,
+    /// Log every Bluetooth SPI transfer (debug only).
+    pub spi_trace: bool,
+    /// Log PCs inside a range, up to a count (debug only).
+    pub pc_trace: Option<(u32, u32)>,
+    pub pc_trace_left: u32,
     /// Woken by the RTC alarm (the once-a-minute update while asleep), not
     /// by a button: the backlight stays off, though the game may draw and
     /// beep (care calls). Cleared by the app when a button is pressed.
@@ -186,6 +191,9 @@ impl Machine {
             clock_refresh: None,
             clock_minute: None,
             stop_on_bluetooth: false,
+            spi_trace: false,
+            pc_trace: None,
+            pc_trace_left: 0,
             alarm_wake: false,
             bluetooth_used: false,
             ble_failed: false,
@@ -289,6 +297,18 @@ impl Machine {
                 true
             }
             Hook::Spi2Transfer => {
+                if self.spi_trace {
+                    let (dev, tx, txlen, rx, sp) = (self.cpu.r[0], self.cpu.r[1], self.cpu.r[2], self.cpu.r[3], self.cpu.r[13]);
+                    let rxlen = self.sys.peek32(sp);
+                    let mut data = Vec::new();
+                    for i in 0..txlen.min(48) {
+                        data.push(self.sys.peek8(tx.wrapping_add(i)));
+                    }
+                    eprintln!(
+                        "[spi2] lr={:08X} dev={} tx={:08X} txlen={} rx={:08X} rxlen={} data={:02X?}",
+                        self.cpu.r[14], dev, tx, txlen, rx, rxlen, &data[..]
+                    );
+                }
                 if !self.bluetooth_used {
                     // nothing in normal play touches this bus: the game is
                     // starting Bluetooth; stop so the window can undo the press
@@ -468,6 +488,14 @@ impl Machine {
         let mut done = 0;
         while done < n {
             let pc = self.cpu.r[15];
+            if let Some((lo, hi)) = self.pc_trace {
+                if pc >= lo && pc <= hi && self.pc_trace_left > 0 {
+                    let sp = self.cpu.r[13];
+                    let slot = self.sys.peek32(sp.wrapping_add(4));
+                    eprintln!("[pc] {:08X} lr={:08X} cpsr={:08X} r0={:08X} slot={:08X}", pc, self.cpu.r[14], self.cpu.cpsr, self.cpu.r[0], slot);
+                    self.pc_trace_left -= 1;
+                }
+            }
             if done > 0 && pc == watch {
                 break;
             }
