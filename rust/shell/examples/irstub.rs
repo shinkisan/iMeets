@@ -31,7 +31,10 @@ fn main() {
         println!("gate f00=1 +2c={v}");
     }
     let tab: Vec<u16> = (0..256).map(|i| { let mut c=i as u16; for _ in 0..8 { c = if c&1!=0 {(c>>1)^0x8408} else {c>>1}; } c }).collect();
-    let mut p = vec![0xFEu8]; p.extend(std::iter::repeat(0).take(21));
+    let text = std::env::args().nth(3).unwrap_or_default();
+    let mut p = vec![0xFEu8];
+    for b in text.as_bytes() { if p.len() < 22 { p.push(*b); } }
+    p.extend(std::iter::repeat(0x20).take(22 - p.len()));
     let mut crc=0xFFFFu16; for &x in &p { crc=(crc>>8)^tab[((crc^x as u16)&0xFF) as usize]; }
     let c=!crc; p.push((c&0xFF) as u8); p.push((c>>8) as u8);
     let mut f=vec![0xC0]; f.extend(p); f.push(0xC0); f.extend([0xFF,0xFF,0xFF]);
@@ -41,6 +44,9 @@ fn main() {
     println!("g={:08X} g+f8={:08X} g+dc={:08X}", g, if g>=0xF8000000 {rd(g-0xF8000000+0xF8)} else {0}, if g>=0xF8000000 {rd(g-0xF8000000+0xDC)} else {0});
     let base = 0xF8011EDCusize - 0xF8000000;
     println!("node {:02X?}", &s.machine.sys.sram[base..base+0x30]);
+    let g2 = u32::from_le_bytes(s.machine.sys.sram[0x10208..0x1020C].try_into().unwrap()) as usize;
+    let c2 = if g2>=0xF8000000 { u32::from_le_bytes(s.machine.sys.sram[g2-0xF8000000+0x2C..g2-0xF8000000+0x30].try_into().unwrap()) } else {0};
+    println!("after feed 2c={c2}");
     println!("after feed flags={:02X?} 14={:02X} 16={:02X}", &s.machine.sys.sram[0x11A54..0x11A58], s.machine.sys.sram[app+0x14], s.machine.sys.sram[app+0x16]);
     let mut px = [0u32; 16_384];
     for i in 0..40 {

@@ -553,6 +553,52 @@ impl Machine {
         (ok, ret)
     }
 
+    pub fn call_thumb3(&mut self, func: u32, a0: u32, a1: u32, a2: u32, limit: u64) -> (bool, u32) {
+        let saved_r = self.cpu.r;
+        let saved_cpsr = self.cpu.cpsr;
+        let sp = self.cpu.r[13];
+        self.cpu.r[0] = a0;
+        self.cpu.r[1] = a1;
+        self.cpu.r[2] = a2;
+        self.cpu.r[13] = (sp.wrapping_sub(0x100)) & !7;
+        self.cpu.r[14] = 0xFFFF_FFF0;
+        self.cpu.r[15] = (func | 1) & !1;
+        self.cpu.cpsr = (self.cpu.cpsr | 0x20) | 0x80;
+        let mut done = 0u64;
+        while done < limit && self.cpu.r[15] != 0xFFFF_FFF0 && self.cpu.fault.is_none() {
+            self.cpu.step(&mut self.sys);
+            done += 1;
+        }
+        let ok = self.cpu.r[15] == 0xFFFF_FFF0 && self.cpu.fault.is_none();
+        let ret = self.cpu.r[0];
+        self.cpu.r = saved_r;
+        self.cpu.cpsr = saved_cpsr;
+        (ok, ret)
+    }
+
+    pub fn call_arm3(&mut self, func: u32, a0: u32, a1: u32, a2: u32, limit: u64) -> (bool, u32) {
+        let saved_r = self.cpu.r;
+        let saved_cpsr = self.cpu.cpsr;
+        let sp = self.cpu.r[13];
+        self.cpu.r[0] = a0;
+        self.cpu.r[1] = a1;
+        self.cpu.r[2] = a2;
+        self.cpu.r[13] = (sp.wrapping_sub(0x100)) & !7;
+        self.cpu.r[14] = 0xFFFF_FFF0;
+        self.cpu.r[15] = func & !3;
+        self.cpu.cpsr = (self.cpu.cpsr & !0x20) | 0x80;
+        let mut done = 0u64;
+        while done < limit && self.cpu.r[15] != 0xFFFF_FFF0 && self.cpu.fault.is_none() {
+            self.cpu.step(&mut self.sys);
+            done += 1;
+        }
+        let ok = self.cpu.r[15] == 0xFFFF_FFF0 && self.cpu.fault.is_none();
+        let ret = self.cpu.r[0];
+        self.cpu.r = saved_r;
+        self.cpu.cpsr = saved_cpsr;
+        (ok, ret)
+    }
+
     pub fn call_arm2(&mut self, func: u32, a0: u32, a1: u32, limit: u64) -> (bool, u32) {
         let saved_r = self.cpu.r;
         let saved_cpsr = self.cpu.cpsr;
