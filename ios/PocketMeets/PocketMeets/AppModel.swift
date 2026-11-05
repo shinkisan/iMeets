@@ -49,6 +49,7 @@ final class AppModel: ObservableObject {
     @Published var showNotes = false
     @Published var showHelp = false
     @Published var showLanguage = false
+    @Published var showLan = false
     private var heart: Timer?
     private var noticeTask: Task<Void, Never>?
     private var lanCancel: AnyCancellable?
@@ -119,6 +120,7 @@ final class AppModel: ObservableObject {
             lanAutoStarted = true
             DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in
                 self?.lan.host()
+                self?.showLan = true
             }
         } else if let i = args.firstIndex(of: "-pmLanJoin"), i + 1 < args.count {
             lanAutoStarted = true

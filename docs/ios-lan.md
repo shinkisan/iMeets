@@ -33,10 +33,10 @@ xcrun simctl create "iMeets B" com.apple.CoreSimulator.SimDeviceType.iPhone-16 c
 
 分别安装启动后：
 
-1. 两台都进 `设置 → 局域网联机`。
-2. A 点“展示二维码”。模拟器里点“复制连接串”（或用 `手动连接` 粘贴）。
-3. B 点“粘贴连接串”/“手动连接”，连接成功后自动回到设备界面。
-4. 顶部出现“联机中”横幅时，就可以在游戏里操作了。
+1. 两台都点设备界面顶部的天线按钮。
+2. 窗口会直接显示本机二维码；对方点“扫码加入”扫它。
+3. 连上后窗口自动关闭，顶部按钮变成绿点 +“红外联机”。
+4. 这时就可以在游戏里操作了。
 
 ## 原生操作
 
@@ -54,7 +54,9 @@ xcrun simctl create "iMeets B" com.apple.CoreSimulator.SimDeviceType.iPhone-16 c
 第一次会弹：
 
 - 本地网络：必须允许；
-- 相机：真机扫码需要；Simulator 没相机，用连接串。
+- 相机：真机扫码需要；Simulator 没相机，用调试参数
+  `-pmLanJoin <payload>` 加入（payload 在 host 容器的
+  `Documents/lan-payload.txt`）。
 
 ## 已知限制
 

@@ -56,6 +56,7 @@ struct ToyView: View {
             }
         }
         .navigationBarHidden(true)
+        .sheet(isPresented: $model.showLan) { LanView() }
         .background(KeyCatcher { name, down in
             guard let index = keyIndex(name) else { return }
             if down {
@@ -368,6 +369,7 @@ struct ToyView: View {
                 }
                 .accessibilityLabel(ocrTitle)
             }
+            lanButton
             chromeButton("ellipsis", model.t("setup_settings")) { model.page = .settings }
         }
         .padding(.horizontal, 20)
@@ -404,6 +406,30 @@ struct ToyView: View {
         }
         _ = model.engine.write(next)
         model.reload()
+    }
+
+    private var lanButton: some View {
+        Button { model.showLan = true } label: {
+            if model.lan.connected {
+                HStack(spacing: 6) {
+                    Circle().fill(Color.green).frame(width: 7, height: 7)
+                    Text("红外联机").font(.system(size: 13, weight: .semibold))
+                }
+                .foregroundStyle(chromeColor)
+                .padding(.horizontal, 12)
+                .frame(height: 44)
+                .pmGlass(Capsule(), interactive: true)
+                .contentShape(Capsule())
+            } else {
+                Image(systemName: "antenna.radiowaves.left.and.right")
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(chromeColor)
+                    .frame(width: 44, height: 44)
+                    .pmGlass(Circle(), interactive: true)
+                    .contentShape(Circle())
+            }
+        }
+        .accessibilityLabel("红外联机")
     }
 
     private var chromeColor: Color {

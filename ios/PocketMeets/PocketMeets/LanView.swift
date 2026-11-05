@@ -6,119 +6,80 @@ struct LanView: View {
     @EnvironmentObject private var model: AppModel
     @Environment(\.dismiss) private var dismiss
     @State private var scanning = false
-    @State private var manual = ""
 
     var body: some View {
         NavigationStack {
-            content
-                .padding(24)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .navigationTitle("联机")
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbar {
-                    ToolbarItem(placement: .cancellationAction) {
-                        Button("关闭") {
-                            model.lan.stop()
-                            dismiss()
-                        }
-                    }
-                }
-                .sheet(isPresented: $scanning) {
-                    QrScannerView { code in
-                        scanning = false
-                        model.lan.join(payload: code)
-                    }
-                }
-                .onChange(of: model.lan.connected) { value in
-                    if value {
-                        model.page = .toy
-                        dismiss()
-                    }
-                }
-        }
-    }
-
-    @ViewBuilder
-    private var content: some View {
-        switch model.lan.mode {
-        case .idle:
-            VStack(spacing: 16) {
-                Button {
-                    model.lan.host()
-                } label: {
-                    Label("展示二维码", systemImage: "qrcode")
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.borderedProminent)
-
-                Button {
-                    scanning = true
-                } label: {
-                    Label("扫码加入", systemImage: "camera.viewfinder")
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.bordered)
-
-                Button("粘贴连接串") {
-                    if let text = UIPasteboard.general.string {
-                        model.lan.join(payload: text)
-                    }
-                }
-                .font(.footnote)
-
-                DisclosureGroup("手动连接") {
-                    TextField("连接串", text: $manual)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                        .font(.caption.monospaced())
-                    Button("连接") { model.lan.join(payload: manual) }
-                        .disabled(manual.isEmpty)
-                }
-                .font(.footnote)
-            }
-        case .hosting:
-            VStack(spacing: 14) {
+            VStack(spacing: 18) {
                 if let qr = model.lan.qr {
                     Image(uiImage: qr)
                         .interpolation(.none)
                         .resizable()
                         .frame(width: 260, height: 260)
+                } else {
+                    ProgressView()
+                        .frame(width: 260, height: 260)
                 }
-                Text("等待扫码")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                Button("复制连接串") {
-                    UIPasteboard.general.string = model.lan.payload
+
+                if model.lan.connected {
+                    Text("已连接")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                    Button("断开") { model.lan.stop() }
+                } else {
+                    Button {
+                        scanning = true
+                    } label: {
+                        Label("扫码加入", systemImage: "camera.viewfinder")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.bordered)
+
+                    if case .joining = model.lan.mode {
+                        ProgressView()
+                    }
+                    if case .failed(let message) = model.lan.mode {
+                        Text(message)
+                            .font(.footnote)
+                            .multilineTextAlignment(.center)
+                            .foregroundStyle(.secondary)
+                    }
                 }
-                .font(.footnote)
-                Button("取消") { model.lan.stop() }
             }
-        case .joining:
-            VStack(spacing: 14) {
-                ProgressView()
-                Text("连接中")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
+            .padding(24)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .navigationTitle("红外联机")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button {
+                        model.lan.stop()
+                        dismiss()
+                    } label: {
+                        Image(systemName: "chevron.backward")
+                            .font(.system(size: 17, weight: .semibold))
+                    }
+                    .accessibilityLabel(model.t("back"))
+                }
             }
-        case .connected:
-            VStack(spacing: 14) {
-                Text("已连接")
-                    .font(.headline)
-                Button("进入设备") {
+            .sheet(isPresented: $scanning) {
+                QrScannerView { code in
+                    scanning = false
+                    model.lan.join(payload: code)
+                }
+            }
+            .onAppear {
+                if !model.lan.connected && model.lan.qr == nil {
+                    model.lan.host()
+                }
+            }
+            .onChange(of: model.lan.connected) { value in
+                if value {
                     model.page = .toy
                     dismiss()
                 }
-                .buttonStyle(.borderedProminent)
-            }
-        case .failed(let message):
-            VStack(spacing: 14) {
-                Text(message)
-                    .font(.footnote)
-                    .multilineTextAlignment(.center)
-                    .foregroundStyle(.secondary)
-                Button("重试") { model.lan.stop() }
             }
         }
+        .interactiveDismissDisabled()
     }
 }
 
