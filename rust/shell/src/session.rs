@@ -297,6 +297,11 @@ impl Session {
         let wall = tg18::rtc_seconds_now();
         self.machine.sys.rtc.base_ticks = (wall * 32768.0) as i64;
         self.machine.sys.rtc.base_time = self.machine.sys.game_time;
+        // The RTC chip only feeds what is drawn; the game's own clock - the
+        // one behind bedtime and daily events - is the SoC time of day. Move
+        // both, or resuming a pause leaves the pet on the frozen schedule.
+        self.machine.sys.rtc_irq.tod_base = (wall as i64).rem_euclid(86_400);
+        self.machine.sys.rtc_irq.tod_set_at = self.machine.sys.game_time;
     }
 
     /// The translation table and the fast-key patch are written against the
