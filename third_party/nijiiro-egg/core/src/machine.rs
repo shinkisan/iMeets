@@ -565,9 +565,9 @@ impl Machine {
         self.cpu.r[15] = (func | 1) & !1;
         self.cpu.cpsr = (self.cpu.cpsr | 0x20) | 0x80;
         let mut done = 0u64;
+        self.sys.last_pc = self.cpu.r[15];
         while done < limit && self.cpu.r[15] != 0xFFFF_FFF0 && self.cpu.fault.is_none() {
-            self.cpu.step(&mut self.sys);
-            done += 1;
+            done += self.exec(1, 0xFFFF_FFF0).max(1);
         }
         let ok = self.cpu.r[15] == 0xFFFF_FFF0 && self.cpu.fault.is_none();
         let ret = self.cpu.r[0];
