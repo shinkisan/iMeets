@@ -14,6 +14,13 @@ final class Engine {
     private var pump = PumpClock()
     private let audio = PcmPlayer()
     private var notBeforeMs: Int64 = 0
+    /// Settings are read once and kept here; the pump used to parse the file
+    /// 125 times a second, which is most of the idle heat.
+    private var cachedPrefs: Prefs?
+    /// Reused for every pump so the tick allocates nothing.
+    private var pcmBuffer = [Int16](repeating: 0, count: 44_100 / 5)
+    /// True while any shell key is held; keeps the tick short for response.
+    private var holdingKeys = false
     var onFrame: (([UInt32], Bool) -> Void)?
     var onNotice: ((String) -> Void)?
     var onStopped: ((String) -> Void)?
@@ -54,7 +61,9 @@ final class Engine {
     func reloadPrefs() -> Prefs {
         queue.sync {
             let json = settingsURL.path.withCString { CString.take(pm_settings_json($0)) }
-            return Prefs.load(json)
+            let prefs = Prefs.load(json)
+            cachedPrefs = prefs
+            return prefs
         }
     }
 
@@ -64,6 +73,7 @@ final class Engine {
                 return "invalid JSON"
             }
             if let session { pm_set_fast_keys(session, prefs.fast_keys ? 1 : 0) }
+            cachedPrefs = prefs
             return settingsURL.path.withCString { path in
                 text.withCString { body in
                     let reply = CString.take(pm_settings_write(path, body))
@@ -151,11 +161,16 @@ final class Engine {
         queue.sync {
             guard let session else { return }
             _ = pm_key(session, Int32(index), down ? 1 : 0)
+            holdingKeys = down
+            if down { armTimer(ms: 1) }
         }
     }
 
     func releaseKeys() {
-        queue.sync { if let session { pm_release_keys(session) } }
+        queue.sync {
+            if let session { pm_release_keys(session) }
+            holdingKeys = false
+        }
     }
 
     func saveNow() -> String {
@@ -213,6 +228,7 @@ final class Engine {
     func setPaused(_ paused: Bool) {
         queue.sync {
             _ = root.path.withCString { pm_set_care_paused($0, paused ? 1 : 0) }
+            cachedPrefs = nil
             if let session {
                 pm_care_pause(session, paused ? 1 : 0, Date().timeIntervalSince1970)
             }
@@ -226,7 +242,9 @@ final class Engine {
     func setEnhanced(_ on: Bool) -> Prefs {
         queue.sync {
             let json = root.path.withCString { CString.take(pm_set_background_care($0, on ? 1 : 0)) }
-            return Prefs.load(json)
+            let prefs = Prefs.load(json)
+            cachedPrefs = prefs
+            return prefs
         }
     }
 
@@ -234,7 +252,9 @@ final class Engine {
         queue.sync {
             let now = Int64(Date().timeIntervalSince1970 * 1000)
             _ = root.path.withCString { pm_care_watch($0, now) }
-            return localizedUnlocked(root.path.withCString { CString.take(pm_care_foreground($0)) })
+            let text = localizedUnlocked(root.path.withCString { CString.take(pm_care_foreground($0)) })
+            cachedPrefs = nil
+            return text
         }
     }
 
@@ -248,7 +268,9 @@ final class Engine {
     func watchCare() -> Bool {
         queue.sync {
             let now = Int64(Date().timeIntervalSince1970 * 1000)
-            return root.path.withCString { pm_care_watch($0, now) != 0 }
+            let fell = root.path.withCString { pm_care_watch($0, now) != 0 }
+            if fell { cachedPrefs = nil }
+            return fell
         }
     }
 
@@ -503,9 +525,15 @@ final class Engine {
     }
 
     private func armTimer(ms: UInt64) {
-        timer?.cancel()
+        pump.intervalMs = ms
+        let delay = DispatchTime.now() + .milliseconds(Int(ms))
+        let period = DispatchTimeInterval.milliseconds(Int(max(ms, 1)))
+        if let timer {
+            timer.schedule(deadline: delay, repeating: period)
+            return
+        }
         let source = DispatchSource.makeTimerSource(queue: queue)
-        source.schedule(deadline: .now() + .milliseconds(Int(ms)), repeating: .milliseconds(Int(max(ms, 1))))
+        source.schedule(deadline: delay, repeating: period)
         source.setEventHandler { [weak self] in self?.tick() }
         source.resume()
         timer = source
@@ -531,9 +559,8 @@ final class Engine {
         input.muted = prefs.muted ? 1 : 0
         input.frame_ns = pump.frameNs
         var output = PmPumpOut()
-        var pcm = [Int16](repeating: 0, count: 44_100 / 5)
-        let cap = Int32(pcm.count)
-        _ = pcm.withUnsafeMutableBufferPointer { raw in
+        let cap = Int32(pcmBuffer.count)
+        pcmBuffer.withUnsafeMutableBufferPointer { raw in
             pm_pump(session, &input, &output, raw.baseAddress, cap)
         }
         if output.catching_up != 0 {
@@ -550,8 +577,8 @@ final class Engine {
         pump.lastSaveMs = output.last_save_ms
         pump.lastCatchupSaveMs = output.last_catchup_save_ms
         if output.play_audio != 0, output.pcm_count > 0 {
-            let count = min(Int(output.pcm_count), pcm.count)
-            audio.write(Array(pcm.prefix(count)), volume: output.volume)
+            let count = min(Int(output.pcm_count), pcmBuffer.count)
+            audio.write(Array(pcmBuffer.prefix(count)), volume: output.volume)
         }
         // TODO(call-jingle): SPEC §14.15. Only firmware PCM is played. No 22050 Hz UI jingle is mixed in.
         if output.take_call != 0 {
@@ -575,9 +602,13 @@ final class Engine {
             audio.stop()
             DispatchQueue.main.async { self.onStopped?(error) }
         }
-        let next = output.next_ms == 0 ? 100 : output.next_ms
+        var next = output.next_ms == 0 ? 100 : output.next_ms
+        // A still screen only needs checking ~30 times a second; key presses
+        // wake the timer immediately, so this costs no responsiveness.
+        if pump.visible, output.drew_frame == 0, output.catching_up == 0, !holdingKeys {
+            next = max(next, 33)
+        }
         if next != pump.intervalMs {
-            pump.intervalMs = next
             armTimer(ms: next)
         }
         pump.monotonic &+= next
@@ -704,7 +735,10 @@ final class Engine {
     }
 
     private func reloadUnlocked() -> Prefs {
-        Prefs.load(settingsURL.path.withCString { CString.take(pm_settings_json($0)) })
+        if let cachedPrefs { return cachedPrefs }
+        let prefs = Prefs.load(settingsURL.path.withCString { CString.take(pm_settings_json($0)) })
+        cachedPrefs = prefs
+        return prefs
     }
 
     private func currentLang() -> Int32 { reloadUnlocked().langCode }
