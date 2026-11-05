@@ -52,6 +52,7 @@ final class AppModel: ObservableObject {
     private var heart: Timer?
     private var noticeTask: Task<Void, Never>?
     private var lanCancel: AnyCancellable?
+    private var lanAutoStarted = false
     private var cameFromBackground = false
 
     init() {
@@ -111,6 +112,23 @@ final class AppModel: ObservableObject {
         library = engine.library()
     }
 
+    private func startLanFromLaunchArgs() {
+        guard !lanAutoStarted else { return }
+        let args = ProcessInfo.processInfo.arguments
+        if args.contains("-pmLanHost") {
+            lanAutoStarted = true
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in
+                self?.lan.host()
+            }
+        } else if let i = args.firstIndex(of: "-pmLanJoin"), i + 1 < args.count {
+            lanAutoStarted = true
+            let payload = args[i + 1]
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in
+                self?.lan.join(payload: payload)
+            }
+        }
+    }
+
     func enter() {
         reload()
         let ready = engine.hasCurrent()
@@ -122,6 +140,7 @@ final class AppModel: ObservableObject {
                 page = .toy
             }
             engine.setVisible(page == .toy || page == .mixing, interactive: focused)
+            startLanFromLaunchArgs()
             askNotificationsIfNeeded()
         } else if page != .shelf {
             page = .setup

@@ -53,6 +53,9 @@ final class LanLink: ObservableObject {
                 case .ready:
                     let p = listener.port?.rawValue ?? 0
                     let payload = Self.payload(port: p)
+                    if let dir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first {
+                        try? payload.write(to: dir.appendingPathComponent("lan-payload.txt"), atomically: true, encoding: .utf8)
+                    }
                     let image = Self.qrImage(payload)
                     Task { @MainActor in
                         self.port = p
@@ -94,7 +97,7 @@ final class LanLink: ObservableObject {
         connection = nil
         listener?.cancel()
         listener = nil
-        rx.removeAll()
+        netQueue.sync { rx.removeAll() }
         while tick.wait(timeout: .now()) == .success {}
         connected = false
         mode = .idle
@@ -183,7 +186,7 @@ final class LanLink: ObservableObject {
 
     private func receive(_ conn: NWConnection) {
         conn.receive(minimumIncompleteLength: 1, maximumLength: 65536) { [weak self] data, _, complete, error in
-            guard let self else { return }
+            guard let self, self.running else { return }
             if let data, !data.isEmpty {
                 self.rx.append(data)
                 self.parse()
@@ -203,11 +206,13 @@ final class LanLink: ObservableObject {
     }
 
     private func parse() {
+        guard running else { return }
         while rx.count >= 3 {
-            let type = rx[0]
-            let len = Int(rx[1]) | (Int(rx[2]) << 8)
-            if rx.count < 3 + len { break }
-            let body = [UInt8](rx.subdata(in: 3..<(3 + len)))
+            let start = rx.startIndex
+            let type = rx[start]
+            let len = Int(rx[start + 1]) | (Int(rx[start + 2]) << 8)
+            guard rx.count >= 3 + len else { break }
+            let body = [UInt8](rx[(start + 3)..<(start + 3 + len)])
             rx.removeFirst(3 + len)
             if type == 0 {
                 engine?.irWrite(body)
