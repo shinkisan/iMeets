@@ -772,8 +772,8 @@ impl System {
         let uart_ctrl = u32::from_le_bytes([
             self.uart[8], self.uart[9], self.uart[10], self.uart[11],
         ]);
-        if !self.uart_rx.is_empty()
-            && uart_ctrl & 0xA000 != 0
+        if ((!self.uart_rx.is_empty() && uart_ctrl & 0xA000 != 0)
+            || uart_ctrl & 0x4000 != 0)
             && (mask >> (32 - UART_IRQ)) & 1 == 0
         {
             return UART_IRQ;
@@ -1108,9 +1108,9 @@ impl System {
             return v;
         }
         if self.uart_rx.is_empty() {
-            0x2000 | 0x0010
+            0x6000 | 0x0010
         } else {
-            0x2000 | 0x8000
+            0x6000 | 0x8000
         }
     }
 
