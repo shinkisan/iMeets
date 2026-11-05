@@ -65,6 +65,8 @@ fn main() {
     let mut frames = 0usize;
     let mut obex = false;
     let mut tama = false;
+    let mut obex_frame: Option<Vec<u8>> = None;
+    let mut tama_frame: Option<Vec<u8>> = None;
     let mut done = false;
     let mut last_text = String::new();
 
@@ -77,9 +79,15 @@ fn main() {
         for buf in [&fa, &fb] {
             if buf.windows(4).any(|w| w == b"OBEX") {
                 obex = true;
+                if obex_frame.is_none() {
+                    obex_frame = Some(buf.clone());
+                }
             }
             if buf.windows(4).any(|w| w == b"TAMA") {
                 tama = true;
+                if tama_frame.is_none() {
+                    tama_frame = Some(buf.clone());
+                }
             }
         }
         for x in &fa {
@@ -106,6 +114,12 @@ fn main() {
     }
 
     println!("frames={frames} obex={obex} tama={tama} finished={done} last={last_text}");
+    if let Some(f) = &obex_frame {
+        println!("first OBEX frame ({} bytes): {:02X?}", f.len(), &f[..f.len().min(48)]);
+    }
+    if let Some(f) = &tama_frame {
+        println!("first TAMA frame ({} bytes): {:02X?}", f.len(), &f[..f.len().min(48)]);
+    }
     if done {
         println!("PASS: the two original firmwares completed an infrared visit");
     } else {
