@@ -35,3 +35,6 @@ tools/fixtures/*
 
 # personal device install helpers (kept out of the public tree)
 /*.command
+
+# node helpers for the QR prototype
+**/node_modules/

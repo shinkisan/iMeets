@@ -489,6 +489,50 @@ B: おめでとう！
 | 真机 | 没有实体机，全部是模拟器双会话 |
 
 
+## 二维码配对原型（本地）
+
+用 `irlanqr` 验证“展示二维码的一方就是 Host，扫码的一方自动连接”。
+
+```sh
+# Host：二维码写到 /tmp/tama-join.png
+POCKET_MEETS_ROM=... irlanqr host /tmp/a 0 35 10 0
+
+# 扫码：从同一张 PNG 解出 payload，再直接连接
+PAYLOAD=$(node tools/qr/qrscan.cjs /tmp/tama-join.png)
+POCKET_MEETS_ROM=... irlanqr join "$PAYLOAD" /tmp/b 35 10 0
+```
+
+二维码内容：
+
+```
+tama://join?v=1&h=127.0.0.1,192.168.2.123&p=53027&t=<token>&c=371189
+```
+
+- `h`：候选地址，Host 本机 + 局域网地址；
+- `p`：TCP 端口；
+- `t`：一次性 token；
+- `c`：6 位兜底码；
+- Join 按顺序尝试每个地址，单个地址 2 秒超时。
+
+实测：
+
+```
+Host: QR /tmp/tama-join.png
+Join: CONNECTED 127.0.0.1:53027
+Host: done sent=66717 recv=53686
+Join: done sent=53686 recv=66717
+Host: バイバイ★またいっしょに あそびたいでござる
+```
+
+二维码生成/解码的 Node 依赖只用于本地原型；iOS 端用 CoreImage
+`CIFilter.qrCodeGenerator` 和 VisionKit / AVFoundation，不需要 Node。
+
+`IRLAN_NATIVE=1` 是原生按键模式的实验开关：连接后不自动导航，由 stdin 的
+`a/b/c` 驱动。当前两个存档的起始界面可能不同（一个在房间、一个还停在
+`ツーしん`），脚本化按键不一定对齐；正式 App 里由用户看屏幕操作，不存在
+这个问题。默认（不带该变量）是已经验证过的自动会话。
+
+
 ## 局域网（TCP）调试
 
 本地已经用 **纯 TCP** 跑通两台模拟器，不经过 HTTP 请求/响应。一个进程做
