@@ -67,6 +67,8 @@ fn main() {
     let mut tama = false;
     let mut obex_frame: Option<Vec<u8>> = None;
     let mut tama_frame: Option<Vec<u8>> = None;
+    let mut cap_a: Vec<u8> = Vec::new();
+    let mut cap_b: Vec<u8> = Vec::new();
     let mut done = false;
     let mut last_text = String::new();
 
@@ -75,6 +77,8 @@ fn main() {
         step(&mut b, 0.02);
         let fa = a.machine.sys.uart_take();
         let fb = b.machine.sys.uart_take();
+        cap_a.extend_from_slice(&fa);
+        cap_b.extend_from_slice(&fb);
         frames += usize::from(!fa.is_empty()) + usize::from(!fb.is_empty());
         for buf in [&fa, &fb] {
             if buf.windows(4).any(|w| w == b"OBEX") {
@@ -114,12 +118,28 @@ fn main() {
     }
 
     println!("frames={frames} obex={obex} tama={tama} finished={done} last={last_text}");
+    let _ = a.save();
+    let _ = b.save();
     if let Some(f) = &obex_frame {
         println!("first OBEX frame ({} bytes): {:02X?}", f.len(), &f[..f.len().min(48)]);
     }
     if let Some(f) = &tama_frame {
         println!("first TAMA frame ({} bytes): {:02X?}", f.len(), &f[..f.len().min(48)]);
     }
+    let scan = |name: &str, bytes: &[u8]| {
+        let soi = bytes.windows(3).filter(|w| *w == [0xFF, 0xD8, 0xFF]).count();
+        let eoi = bytes.windows(2).filter(|w| *w == [0xFF, 0xD9]).count();
+        let first = bytes.windows(3).position(|w| w == [0xFF, 0xD8, 0xFF]);
+        let last = bytes.windows(2).rposition(|w| w == [0xFF, 0xD9]);
+        let span = match (first, last) {
+            (Some(a), Some(b)) if b > a => Some(b + 2 - a),
+            _ => None,
+        };
+        println!("{name}: {} bytes, JPEG SOI={soi} EOI={eoi} first_span={span:?}", bytes.len());
+        let _ = std::fs::write(format!("/tmp/{name}.bin"), bytes);
+    };
+    scan("ir-capture-a", &cap_a);
+    scan("ir-capture-b", &cap_b);
     if done {
         println!("PASS: the two original firmwares completed an infrared visit");
     } else {
