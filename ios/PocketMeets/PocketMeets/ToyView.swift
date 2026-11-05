@@ -424,7 +424,7 @@ struct ToyView: View {
             if model.lan.connected {
                 HStack(spacing: 6) {
                     Circle().fill(Color.green).frame(width: 7, height: 7)
-                    Text("红外联机").font(.system(size: 13, weight: .semibold))
+                    Text("面对面").font(.system(size: 13, weight: .semibold))
                 }
                 .foregroundStyle(chromeColor)
                 .padding(.horizontal, 12)
@@ -440,7 +440,7 @@ struct ToyView: View {
                     .contentShape(Circle())
             }
         }
-        .accessibilityLabel("红外联机")
+        .accessibilityLabel("面对面联机")
     }
 
     private var chromeColor: Color {
@@ -512,7 +512,7 @@ struct ToyView: View {
                             .fill(isNight ? Color(rgb: 0x2E2748) : Color(rgb: 0xF0D6E1))
                             .padding(-13)
                     )
-                HStack(spacing: max(18, key * 0.45)) {
+                HStack(spacing: max(24, key * 0.62)) {
                     shellKey("A", 0, "A", side: key, minimal: true)
                     shellKey("B", 1, model.t("confirm_wake"), side: key, minimal: true)
                     shellKey("C", 2, "C", side: key, minimal: true)

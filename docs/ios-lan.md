@@ -35,7 +35,7 @@ xcrun simctl create "iMeets B" com.apple.CoreSimulator.SimDeviceType.iPhone-16 c
 
 1. 两台都点设备界面顶部的天线按钮。
 2. 窗口会直接显示本机二维码；对方点“扫码加入”扫它。
-3. 连上后窗口自动关闭，顶部按钮变成绿点 +“红外联机”。
+3. 连上后窗口自动关闭，顶部按钮变成绿点 +“面对面”。
 4. 这时就可以在游戏里操作了。
 
 ## 原生操作

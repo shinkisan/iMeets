@@ -24,7 +24,7 @@ struct LanView: View {
                                 .stroke(Color.primary.opacity(0.06), lineWidth: 0.5)
                         )
                         .shadow(color: .black.opacity(0.10), radius: 18, y: 6)
-                        .accessibilityLabel("红外联机二维码")
+                        .accessibilityLabel("面对面联机二维码")
 
                     Text("让另一台 iPhone 扫描二维码")
                         .font(.footnote)
@@ -78,7 +78,7 @@ struct LanView: View {
             }
             .padding(24)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .navigationTitle("红外联机")
+            .navigationTitle("面对面联机")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
