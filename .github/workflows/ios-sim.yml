@@ -25,8 +25,10 @@ jobs:
           echo "host=$ARCH target=$TARGET"
           rustup target add "$TARGET"
           cargo build --release --target "$TARGET" --manifest-path rust/shell/Cargo.toml
-          mkdir -p target/aarch64-apple-ios-sim/release
-          cp "target/$TARGET/release/libpocket_meets.a" target/aarch64-apple-ios-sim/release/libpocket_meets.a
+          if [ "$TARGET" != "aarch64-apple-ios-sim" ]; then
+            mkdir -p target/aarch64-apple-ios-sim/release
+            cp "target/$TARGET/release/libpocket_meets.a" target/aarch64-apple-ios-sim/release/libpocket_meets.a
+          fi
       - name: Xcode build
         run: |
           set -euo pipefail
