@@ -90,7 +90,15 @@ excluded from backups.
 | `rust/shell` | Session pump, catch-up, key patch, text buffers, settings, FFI (`include/pocket_meets.h`) |
 | `ios/PocketMeets` | SwiftUI app |
 | `tools` | String extraction, translation table generation, font/menu research, coverage checks |
+| `docs` | Infrared protocol notes and local verification |
 | `rust/shell/examples` | Headless probes: menu traversal, latency, key scan, clock jump |
+
+## Infrared link
+
+The original two-toy infrared visit (`つうしん → みーつ → あそぶ`) now runs in the
+emulator: the firmware itself performs link negotiation, the OBEX `TAMA` exchange and
+the goodbye flow. Protocol notes and the local verification harness are in
+[docs/infrared.md](docs/infrared.md).
 
 ## Related projects
 

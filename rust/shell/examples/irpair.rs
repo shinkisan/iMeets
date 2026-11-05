@@ -8,10 +8,8 @@
 //! The run is a success when the firmware itself finishes the visit and shows
 //! its goodbye / out-for-the-day message.
 
-use std::path::Path;
 use pocket_meets::session::Session;
-
-const ROM: &str = "/mnt/c/Users/gurri/Downloads/fw_tg18_jp_v062_2019-09-12_sweets.bin";
+use std::path::{Path, PathBuf};
 
 fn step(s: &mut Session, seconds: f64) {
     let mut l = seconds;
@@ -45,10 +43,13 @@ fn to_comm(s: &mut Session) {
 }
 
 fn main() {
+    let rom = std::env::var("POCKET_MEETS_ROM")
+        .expect("set POCKET_MEETS_ROM to a Sweets v062 dump");
+    let rom = PathBuf::from(rom);
     let da = std::env::args().nth(1).expect("save A");
     let db = std::env::args().nth(2).expect("save B");
-    let mut a = Session::open_care(Path::new(ROM), Path::new(&da), false).unwrap();
-    let mut b = Session::open_care(Path::new(ROM), Path::new(&db), false).unwrap();
+    let mut a = Session::open_care(&rom, Path::new(&da), false).unwrap();
+    let mut b = Session::open_care(&rom, Path::new(&db), false).unwrap();
     to_comm(&mut a);
     to_comm(&mut b);
 
@@ -104,9 +105,7 @@ fn main() {
         }
     }
 
-    println!(
-        "frames={frames} obex={obex} tama={tama} finished={done} last={last_text}"
-    );
+    println!("frames={frames} obex={obex} tama={tama} finished={done} last={last_text}");
     if done {
         println!("PASS: the two original firmwares completed an infrared visit");
     } else {

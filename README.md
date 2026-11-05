@@ -82,7 +82,12 @@ cargo build --release --target x86_64-apple-ios \
 | `rust/shell` | 会话 pump、补时、按键补丁、文字缓冲、设置、FFI（`include/pocket_meets.h`） |
 | `ios/PocketMeets` | SwiftUI App |
 | `tools` | 字符串抽取、翻译表生成、字模/菜单研究、覆盖率检查 |
+| `docs` | 红外协议逆向笔记与本机验证 |
 | `rust/shell/examples` | 无头探针：菜单遍历、延迟、按键扫描、时钟跳变 |
+
+## 红外联机
+
+两台机器的原版红外联机（`つうしん → みーつ → あそぶ`）已经在模拟器里跑通：链路帧、OBEX `TAMA` 服务和告别流程都由固件自己完成。协议细节和本机验证方法见 [docs/infrared.md](docs/infrared.md)。
 
 ## 相关项目
 
