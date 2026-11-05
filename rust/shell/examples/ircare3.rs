@@ -56,7 +56,17 @@ fn main() {
     let rom = std::env::var("POCKET_MEETS_ROM").expect("POCKET_MEETS_ROM");
     let base = std::env::args().nth(1).expect("save");
     let action = std::env::args().nth(2).unwrap_or_else(|| "feed".into());
+    let hour: Option<f64> = std::env::args().nth(3).and_then(|v| v.parse().ok());
     let mut s = Session::open_care(Path::new(&rom), Path::new(&base), false).unwrap();
+    if let Some(h) = hour {
+        let care = s.care_at();
+        let day = (care / 86_400.0).floor() * 86_400.0;
+        let at = day + h * 3600.0;
+        s.machine.sys.rtc.base_ticks = (at * 32768.0) as i64;
+        s.machine.sys.rtc.base_time = s.machine.sys.game_time;
+        s.machine.sys.rtc_irq.tod_base = ((at as i64) % 86_400).rem_euclid(86_400);
+        s.machine.sys.rtc_irq.tod_set_at = s.machine.sys.game_time;
+    }
     step(&mut s, 2.0);
     step(&mut s, 15.0);
     s.display_awake(true);

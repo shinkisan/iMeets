@@ -51,4 +51,13 @@ fn main() {
     println!("profile -> {:?}", text(&mut s));
     tap(&mut s, 0);
     println!("stats -> {:?}", text(&mut s));
+    let mut px = [0u32; 16_384];
+    s.frame(&mut px);
+    let mut rgb = Vec::with_capacity(16_384 * 3);
+    for p in &px {
+        rgb.push(((p >> 16) & 0xff) as u8);
+        rgb.push(((p >> 8) & 0xff) as u8);
+        rgb.push((p & 0xff) as u8);
+    }
+    let _ = std::fs::write("/tmp/stats.rgb", &rgb);
 }
