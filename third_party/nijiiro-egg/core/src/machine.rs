@@ -73,6 +73,8 @@ pub struct Machine {
     /// Log PCs inside a range, up to a count (debug only).
     pub pc_trace: Option<(u32, u32)>,
     pub pc_trace_left: u32,
+    /// Extra SRAM word printed with each PC-trace hit (debug only).
+    pub trace_word: Option<u32>,
     /// Woken by the RTC alarm (the once-a-minute update while asleep), not
     /// by a button: the backlight stays off, though the game may draw and
     /// beep (care calls). Cleared by the app when a button is pressed.
@@ -194,6 +196,7 @@ impl Machine {
             spi_trace: false,
             pc_trace: None,
             pc_trace_left: 0,
+            trace_word: None,
             alarm_wake: false,
             bluetooth_used: false,
             ble_failed: false,
@@ -488,11 +491,13 @@ impl Machine {
         let mut done = 0;
         while done < n {
             let pc = self.cpu.r[15];
+            self.sys.last_pc = pc;
             if let Some((lo, hi)) = self.pc_trace {
                 if pc >= lo && pc <= hi && self.pc_trace_left > 0 {
                     let sp = self.cpu.r[13];
                     let slot = self.sys.peek32(sp.wrapping_add(4));
-                    eprintln!("[pc] {:08X} lr={:08X} cpsr={:08X} r0={:08X} slot={:08X}", pc, self.cpu.r[14], self.cpu.cpsr, self.cpu.r[0], slot);
+                    let extra = self.trace_word.map(|a| self.sys.peek32(a)).unwrap_or(0);
+                    eprintln!("[pc] {:08X} lr={:08X} cpsr={:08X} r0={:08X} slot={:08X} extra={:08X}", pc, self.cpu.r[14], self.cpu.cpsr, self.cpu.r[0], slot, extra);
                     self.pc_trace_left -= 1;
                 }
             }
@@ -517,6 +522,49 @@ impl Machine {
 
     /// Call one firmware function and restore the interrupted registers.
     /// Debug helper: a fault leaves the machine stopped.
+    pub fn call_arm_ret(&mut self, func: u32, arg: u32, limit: u64) -> (bool, u32) {
+        let saved_r = self.cpu.r;
+        let saved_cpsr = self.cpu.cpsr;
+        let sp = self.cpu.r[13];
+        self.cpu.r[0] = arg;
+        self.cpu.r[13] = (sp.wrapping_sub(0x100)) & !7;
+        self.cpu.r[14] = 0xFFFF_FFF0;
+        self.cpu.r[15] = func & !3;
+        self.cpu.cpsr = (self.cpu.cpsr & !0x20) | 0x80;
+        let mut done = 0u64;
+        while done < limit && self.cpu.r[15] != 0xFFFF_FFF0 && self.cpu.fault.is_none() {
+            self.cpu.step(&mut self.sys);
+            done += 1;
+        }
+        let ok = self.cpu.r[15] == 0xFFFF_FFF0 && self.cpu.fault.is_none();
+        let ret = self.cpu.r[0];
+        self.cpu.r = saved_r;
+        self.cpu.cpsr = saved_cpsr;
+        (ok, ret)
+    }
+
+    pub fn call_arm2(&mut self, func: u32, a0: u32, a1: u32, limit: u64) -> (bool, u32) {
+        let saved_r = self.cpu.r;
+        let saved_cpsr = self.cpu.cpsr;
+        let sp = self.cpu.r[13];
+        self.cpu.r[0] = a0;
+        self.cpu.r[1] = a1;
+        self.cpu.r[13] = (sp.wrapping_sub(0x100)) & !7;
+        self.cpu.r[14] = 0xFFFF_FFF0;
+        self.cpu.r[15] = func & !3;
+        self.cpu.cpsr = (self.cpu.cpsr & !0x20) | 0x80;
+        let mut done = 0u64;
+        while done < limit && self.cpu.r[15] != 0xFFFF_FFF0 && self.cpu.fault.is_none() {
+            self.cpu.step(&mut self.sys);
+            done += 1;
+        }
+        let ok = self.cpu.r[15] == 0xFFFF_FFF0 && self.cpu.fault.is_none();
+        let ret = self.cpu.r[0];
+        self.cpu.r = saved_r;
+        self.cpu.cpsr = saved_cpsr;
+        (ok, ret)
+    }
+
     pub fn call_arm(&mut self, func: u32, arg: u32, limit: u64) -> bool {
         const SENTINEL: u32 = 0xFFFF_FFF0;
         let saved_r = self.cpu.r;

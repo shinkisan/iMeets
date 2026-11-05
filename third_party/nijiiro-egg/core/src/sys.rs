@@ -326,6 +326,16 @@ pub struct System {
     pub uart_trace: bool,
     /// Force the UART status word (debug only).
     pub uart_force: Option<u32>,
+    /// Force the UART interrupt-flag word (debug only).
+    pub uart_flags: Option<u32>,
+    /// Log writes inside an address range (debug only).
+    pub watch_write: Option<(u32, u32)>,
+    pub watch_write_left: u32,
+    /// PC of the instruction doing the current bus access (debug only).
+    pub last_pc: u32,
+    /// Log reads inside an address range (debug only).
+    pub watch_read: Option<(u32, u32)>,
+    pub watch_read_left: u32,
     /// Zero pages mapped on demand for stray accesses (64 KiB each).
     pub extra: HashMap<u32, Vec<u8>>,
     pub unmapped: Vec<(u32, u32)>,
@@ -397,6 +407,12 @@ impl System {
             uart_is_ram: false,
             uart_trace: false,
             uart_force: None,
+            uart_flags: None,
+            watch_write: None,
+            watch_write_left: 0,
+            last_pc: 0,
+            watch_read: None,
+            watch_read_left: 0,
             extra: HashMap::new(),
             unmapped: Vec::new(),
             regs: RegMap::default(),
@@ -751,7 +767,15 @@ impl System {
                 return *n;
             }
         }
-        if !self.uart_rx.is_empty() && (mask >> (32 - UART_IRQ)) & 1 == 0 {
+        // The IRQ handler only runs when the UART interrupt enables are set;
+        // otherwise a queued byte would storm the CPU in IRQ mode.
+        let uart_ctrl = u32::from_le_bytes([
+            self.uart[8], self.uart[9], self.uart[10], self.uart[11],
+        ]);
+        if !self.uart_rx.is_empty()
+            && uart_ctrl & 0xA000 != 0
+            && (mask >> (32 - UART_IRQ)) & 1 == 0
+        {
             return UART_IRQ;
         }
         0
@@ -1059,6 +1083,26 @@ impl System {
     /// the IRQ handler drains, bit 4 is the FIFO-empty flag (clear while a
     /// byte is waiting), and bit 13 is the transmit event. The layout comes
     /// from the handler at 0xF80030F0.
+    #[inline(always)]
+    fn note_read(&mut self, addr: u32) {
+        if let Some((lo, hi)) = self.watch_read {
+            if addr >= lo && addr <= hi && self.watch_read_left > 0 {
+                eprintln!("[r] pc={:08X} {:08X}", self.last_pc, addr);
+                self.watch_read_left -= 1;
+            }
+        }
+    }
+
+    #[inline(always)]
+    fn note_write(&mut self, addr: u32, val: u32) {
+        if let Some((lo, hi)) = self.watch_write {
+            if addr >= lo && addr <= hi && self.watch_write_left > 0 {
+                eprintln!("[w] pc={:08X} {:08X} = {:08X}", self.last_pc, addr, val);
+                self.watch_write_left -= 1;
+            }
+        }
+    }
+
     fn uart_status(&self) -> u32 {
         if let Some(v) = self.uart_force {
             return v;
@@ -1082,7 +1126,7 @@ impl System {
         };
         let val = match word {
             0x00 => self.uart_rx.pop_front().map(u32::from).unwrap_or(0),
-            0x04 => 0,
+            0x04 => self.uart_flags.unwrap_or(0),
             0x10 => self.uart_status(),
             _ => saved,
         };
@@ -1236,6 +1280,7 @@ impl System {
 impl Bus for System {
     #[inline(always)]
     fn read8(&mut self, addr: u32) -> u8 {
+        self.note_read(addr);
         match self.fast(addr) {
             Some((m, o)) => m[o],
             None => self.slow_read(addr, 1) as u8,
@@ -1244,6 +1289,7 @@ impl Bus for System {
 
     #[inline(always)]
     fn read16(&mut self, addr: u32) -> u16 {
+        self.note_read(addr);
         match self.fast(addr) {
             Some((m, o)) if o + 2 <= m.len() => u16::from_le_bytes([m[o], m[o + 1]]),
             _ => self.slow_read(addr, 2) as u16,
@@ -1252,6 +1298,7 @@ impl Bus for System {
 
     #[inline(always)]
     fn read32(&mut self, addr: u32) -> u32 {
+        self.note_read(addr);
         match self.fast(addr) {
             Some((m, o)) if o + 4 <= m.len() => u32::from_le_bytes([m[o], m[o + 1], m[o + 2], m[o + 3]]),
             _ => self.slow_read(addr, 4),
@@ -1260,6 +1307,7 @@ impl Bus for System {
 
     #[inline(always)]
     fn write8(&mut self, addr: u32, val: u8) {
+        self.note_write(addr, val as u32);
         if self.tracking {
             self.log_write(addr);
         }
@@ -1271,6 +1319,7 @@ impl Bus for System {
 
     #[inline(always)]
     fn write16(&mut self, addr: u32, val: u16) {
+        self.note_write(addr, val as u32);
         if self.tracking {
             self.log_write(addr);
         }
@@ -1282,6 +1331,7 @@ impl Bus for System {
 
     #[inline(always)]
     fn write32(&mut self, addr: u32, val: u32) {
+        self.note_write(addr, val);
         if self.tracking {
             self.log_write(addr);
         }

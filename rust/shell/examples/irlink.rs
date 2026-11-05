@@ -28,8 +28,11 @@ fn main() {
     let mut ticks = 0u32;
     for i in 0..1500 {
         step(&mut a, 0.02); step(&mut b, 0.02); ticks += 1;
-        if let Some(byte) = inject {
-            if ticks % 10 == 0 { a.machine.sys.uart_receive(byte); b.machine.sys.uart_receive(byte); }
+        if inject.is_some() && ticks % 10 == 0 {
+            for s in [&mut a, &mut b] {
+                for _ in 0..10 { s.machine.sys.uart_receive(0xFF); }
+                s.machine.sys.uart_receive(0xC0);
+            }
         }
         let fa = a.machine.sys.uart_take(); let fb = b.machine.sys.uart_take();
         for x in &fa { b.machine.sys.uart_receive(*x); }
