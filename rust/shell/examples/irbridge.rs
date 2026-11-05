@@ -32,13 +32,20 @@ fn main() {
     for i in 0..500 {
         a.machine.sys.uart[8..12].copy_from_slice(&0xF070u32.to_le_bytes());
         b.machine.sys.uart[8..12].copy_from_slice(&0xF070u32.to_le_bytes());
+        for z in [&mut a, &mut b] {
+            z.machine.sys.sram[0x11A5C+0x24..0x11A5C+0x28].copy_from_slice(&0xF8013F00u32.to_le_bytes());
+            z.machine.sys.sram[0x11A5C+0x28..0x11A5C+0x2C].copy_from_slice(&1u32.to_le_bytes());
+        }
         step(&mut a, 0.02); step(&mut b, 0.02);
-        if i == 50 {
-            let ra = u32::from_le_bytes(a.machine.sys.sram[0x10208..0x1020C].try_into().unwrap()) as usize;
-            let rb = u32::from_le_bytes(b.machine.sys.sram[0x10208..0x1020C].try_into().unwrap()) as usize;
-            if ra >= 0xF8000000 { a.machine.sys.sram[ra-0xF8000000+0x2C..ra-0xF8000000+0x30].copy_from_slice(&1u32.to_le_bytes()); }
-            if rb >= 0xF8000000 { b.machine.sys.sram[rb-0xF8000000+0x2C..rb-0xF8000000+0x30].copy_from_slice(&1u32.to_le_bytes()); }
-            println!("set 2c=1");
+        if i >= 50 {
+            for z in [&mut a, &mut b] {
+                let r = u32::from_le_bytes(z.machine.sys.sram[0x1020C..0x10210].try_into().unwrap()) as usize;
+                if r >= 0xF8000000 {
+                    let bb = r - 0xF8000000;
+                    z.machine.sys.sram[bb+0x2C..bb+0x30].copy_from_slice(&1u32.to_le_bytes());
+                    z.machine.sys.sram[bb+0xF00] = 1;
+                }
+            }
         }
         let fa = a.machine.sys.uart_take(); let fb = b.machine.sys.uart_take();
         if !fa.is_empty() { for x in &fa { b.machine.sys.uart_receive(*x); } }
@@ -50,7 +57,7 @@ fn main() {
             let ga = rd(&a, 0x10208) as usize; let gb = rd(&b, 0x10208) as usize;
             let ca = if ga>=0xF8000000 { u32::from_le_bytes(a.machine.sys.sram[ga-0xF8000000+0x2C..ga-0xF8000000+0x30].try_into().unwrap()) } else {0};
             let cb = if gb>=0xF8000000 { u32::from_le_bytes(b.machine.sys.sram[gb-0xF8000000+0x2C..gb-0xF8000000+0x30].try_into().unwrap()) } else {0};
-            println!("t={:4.1} A[{}] B[{}] 2cA={ca} 2cB={cb} fA={:02X?} fB={:02X?}", i as f64*0.02, x, y, &a.machine.sys.sram[0x11A54..0x11A58], &b.machine.sys.sram[0x11A54..0x11A58]);
+            println!("t={:4.1} A[{}] B[{}] 2cA={ca} 2cB={cb} tx={} rxB={} fA={:02X?} fB={:02X?}", i as f64*0.02, x, y, fa.len(), b.machine.sys.uart_rx.len(), &a.machine.sys.sram[0x11A54..0x11A58], &b.machine.sys.sram[0x11A54..0x11A58]);
         }
     }
 }

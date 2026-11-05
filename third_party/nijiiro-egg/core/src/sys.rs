@@ -324,6 +324,10 @@ pub struct System {
     pub uart_is_ram: bool,
     /// Log UART register accesses (debug only).
     pub uart_trace: bool,
+    /// Edge-triggered transmit interrupt (debug model).
+    pub uart_tx_irq: bool,
+    /// Next emulated time a transmit interrupt may be raised.
+    pub uart_tx_next: f64,
     /// Force the UART status word (debug only).
     pub uart_force: Option<u32>,
     /// Force the UART interrupt-flag word (debug only).
@@ -406,6 +410,8 @@ impl System {
             uart_tx: std::collections::VecDeque::new(),
             uart_is_ram: false,
             uart_trace: false,
+            uart_tx_irq: false,
+            uart_tx_next: 0.0,
             uart_force: None,
             uart_flags: None,
             watch_write: None,
@@ -759,7 +765,7 @@ impl System {
     }
 
     /// Highest-priority unmasked pending IRQ number (1..32), 0 = none.
-    pub fn pending_irq(&self) -> u32 {
+    pub fn pending_irq(&mut self) -> u32 {
         let mask = self.reg(INTC_MASK);
         let lines = self.irq_lines();
         for (n, on) in [RTC_IRQ, TIMER_IRQ, LCD_IRQ, ADC_IRQ].iter().zip(lines) {
@@ -772,16 +778,25 @@ impl System {
         let uart_ctrl = u32::from_le_bytes([
             self.uart[8], self.uart[9], self.uart[10], self.uart[11],
         ]);
-        if ((!self.uart_rx.is_empty() && uart_ctrl & 0xA000 != 0)
-            || uart_ctrl & 0x4000 != 0)
+        if !self.uart_rx.is_empty()
+            && uart_ctrl & 0xA000 != 0
             && (mask >> (32 - UART_IRQ)) & 1 == 0
         {
+            return UART_IRQ;
+        }
+        if uart_ctrl & 0x4000 != 0
+            && self.now >= self.uart_tx_next
+            && (mask >> (32 - UART_IRQ)) & 1 == 0
+        {
+            // The real transmitter raises one interrupt per byte at the baud
+            // rate; a level interrupt would starve the game loop.
+            self.uart_tx_next = self.now + 0.001;
             return UART_IRQ;
         }
         0
     }
 
-    pub fn irq_wanted(&self) -> bool {
+    pub fn irq_wanted(&mut self) -> bool {
         self.reg(INTC_DISABLE) & 1 == 0 && self.pending_irq() != 0
     }
 
@@ -842,7 +857,7 @@ impl System {
     }
 
     /// Emulated time of the next thing that can change what the CPU sees.
-    pub fn next_event(&self) -> f64 {
+    pub fn next_event(&mut self) -> f64 {
         let now = self.now;
         if self.adc_converting || self.irq_wanted() {
             return now;
@@ -1147,9 +1162,19 @@ impl System {
         let new = (old & !mask) | ((val << sh) & mask);
         match word {
             0x00 => self.uart_tx.push_back((new & 0xff) as u8),
+            0x08 => {
+                if new & 0x4000 != 0 && old & 0x4000 == 0 {
+                    self.uart_tx_irq = true;
+                }
+                self.uart[i..i + 4].copy_from_slice(&new.to_le_bytes());
+            }
             0x10 => {}
             _ => self.uart[i..i + 4].copy_from_slice(&new.to_le_bytes()),
         }
+    }
+
+    pub fn clear_uart_tx_irq(&mut self) {
+        self.uart_tx_irq = false;
     }
 
     /// Feed one byte from the other toy's infrared port.
