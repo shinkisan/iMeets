@@ -9,17 +9,10 @@ cd "$(dirname "$0")/.."
 DEVICE=${DEVICE:-iPhone 16}
 BUNDLE=app.pocketmeets.ios
 DD=${DD:-$HOME/derived-tama-sim}
-echo "== rust simulator library =="
-rustup target add aarch64-apple-ios-sim x86_64-apple-ios
+echo "== rust simulator library (Apple Silicon) =="
+rustup target add aarch64-apple-ios-sim
 cargo build --release --target aarch64-apple-ios-sim \
   --manifest-path rust/shell/Cargo.toml
-cargo build --release --target x86_64-apple-ios \
-  --manifest-path rust/shell/Cargo.toml
-lipo -create \
-  target/aarch64-apple-ios-sim/release/libpocket_meets.a \
-  target/x86_64-apple-ios/release/libpocket_meets.a \
-  -output "$TMPDIR/libpocket_meets.a"
-cp "$TMPDIR/libpocket_meets.a" target/aarch64-apple-ios-sim/release/libpocket_meets.a
 
 echo "== xcode =="
 xcodebuild -project ios/PocketMeets/PocketMeets.xcodeproj \
@@ -33,6 +26,8 @@ echo "== simulator =="
 xcrun simctl boot "$DEVICE" 2>/dev/null || true
 open -a Simulator
 xcrun simctl bootstatus "$DEVICE" -b
+# install can silently keep an old bundle while the app is still running
+xcrun simctl terminate "$DEVICE" "$BUNDLE" 2>/dev/null || true
 xcrun simctl install "$DEVICE" "$APP"
 xcrun simctl launch "$DEVICE" "$BUNDLE"
 echo "done"
