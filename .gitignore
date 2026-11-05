@@ -38,3 +38,6 @@ tools/fixtures/*
 
 # node helpers for the QR prototype
 **/node_modules/
+
+# local LAN demo artifacts
+/tools/lan-demo/out/

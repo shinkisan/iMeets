@@ -321,6 +321,7 @@ fn main() {
     let mut queued: VecDeque<usize> = VecDeque::new();
     let mut held: Option<(usize, usize)> = None;
     let mut next_key_at = 250usize;
+    let shot_dir = std::env::var("IRLAN_SHOT_DIR").ok();
     let mut last_text = String::new();
     let mut kicked = false;
     let mut kick_at: Option<usize> = None;
@@ -395,6 +396,18 @@ fn main() {
         }
         if i % 25 == 0 {
             s.frame(&mut px);
+            if let Some(dir) = &shot_dir {
+                if i % 100 == 0 {
+                    let _ = std::fs::create_dir_all(dir);
+                    let mut rgb = Vec::with_capacity(16_384 * 3);
+                    for p in &px {
+                        rgb.push(((p >> 16) & 0xff) as u8);
+                        rgb.push(((p >> 8) & 0xff) as u8);
+                        rgb.push((p & 0xff) as u8);
+                    }
+                    let _ = std::fs::write(format!("{dir}/{role}-{i:04}.rgb"), &rgb);
+                }
+            }
             let t = pocket_meets::menu_text::read(&px);
             if t != last_text {
                 eprintln!("[{t}]");

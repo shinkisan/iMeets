@@ -533,6 +533,25 @@ Host: バイバイ★またいっしょに あそびたいでござる
 这个问题。默认（不带该变量）是已经验证过的自动会话。
 
 
+### 本地二维码演示包
+
+```sh
+bash tools/lan-demo/run.sh
+# 输出：tools/lan-demo/out/report.png
+```
+
+脚本会：
+
+1. 复制两个存档到 `tools/lan-demo/out/a|b`；
+2. 启动 Host，生成 `qr.png`；
+3. 从 PNG 解出 payload，启动 Join；
+4. 运行 35 秒的原版红外会话；
+5. 把二维码和两边每 2 秒的屏幕拼成一张 `report.png`。
+
+拼图里蓝框是 Host，粉框是 Join；左上角是二维码。日志在
+`out/host.log` / `out/join.log`。
+
+
 ## 局域网（TCP）调试
 
 本地已经用 **纯 TCP** 跑通两台模拟器，不经过 HTTP 请求/响应。一个进程做
