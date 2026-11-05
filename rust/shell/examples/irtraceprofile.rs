@@ -28,8 +28,8 @@ fn main() {
     let mut s = Session::open_care(Path::new(&rom), Path::new(&base), false).unwrap();
     step(&mut s, 2.0);
     s.display_awake(true);
-    s.machine.sys.watch_read = Some((0xF800D7C0, 0xF800D880));
-    s.machine.sys.watch_read_left = 300;
+    s.machine.sys.watch_read = Some((0xF800D000, 0xF800DC00));
+    s.machine.sys.watch_read_left = 600;
     if text(&mut s).contains(":") {
         tap(&mut s, 0);
         step(&mut s, 2.0);

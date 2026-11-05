@@ -250,6 +250,29 @@ POCKET_MEETS_ROM=... cargo run --release --example irforward -- <save> 48
 `irgender` 可以打开个人资料页并截图，用来确认性别。
 
 
+
+### 雌性孵化：已成功
+
+新鲜蛋默认会孵出雄性 `ふわつのっち`。在启动/等待画面之后、名字输入的 B 序列之前，**多按一次 C**，再按原来的 B 流程完成名字和确认，就会孵出：
+
+```
+ぷちもちっち  ♀
+```
+
+验证：
+
+- 个人资料页截图 `/tmp/female-verified.png`；
+- 性别符号区域哈希 `0x33B560F1FC201ABC`，与雄性婴儿的 `0x91B362866D3AB41C` 不同；
+- 稳定存档在 `/tmp/female-save`（含 `autosave.t18s` 和 `game.flash`）。
+
+工具：
+
+```sh
+POCKET_MEETS_ROM=... cargo run --release --example irhatch_female -- <empty-save-dir>
+```
+
+这个雌性档可以继续用 6 小时照顾循环养大，然后和雄性档跑 `プロポーズ`。
+
 ### 性别改存档的尝试
 
 - 在宠物记录区 `0x0D7C0..0x0D870` 逐字节 XOR `0xFF`，个人资料页右下角的性别符号区域没有变化（少数偏移会让资料页打不开），所以性别不是这段里的一个简单字节/位。
