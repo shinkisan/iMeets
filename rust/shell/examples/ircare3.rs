@@ -114,8 +114,23 @@ fn main() {
             step(&mut s, 2.0);
             println!("start -> {:?}", text(&mut s));
         }
+        "bath" => {
+            println!("goto bath: {}", goto(&mut s, "トイレ・おふろ"));
+            tap(&mut s, 1);
+            step(&mut s, 1.5);
+            println!("  bath menu -> {:?}", text(&mut s));
+            tap(&mut s, 0);
+            step(&mut s, 1.0);
+            println!("  move -> {:?}", text(&mut s));
+            tap(&mut s, 1);
+            step(&mut s, 2.0);
+            println!("  after -> {:?}", text(&mut s));
+        }
         "clean" => {
             println!("goto clean: {}", goto(&mut s, "トイレ・おふろ"));
+            tap(&mut s, 1);
+            step(&mut s, 1.5);
+            println!("  clean menu -> {:?}", text(&mut s));
             tap(&mut s, 1);
             step(&mut s, 2.0);
             println!("  after -> {:?}", text(&mut s));
