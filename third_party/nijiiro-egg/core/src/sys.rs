@@ -324,6 +324,8 @@ pub struct System {
     pub uart_is_ram: bool,
     /// Log UART register accesses (debug only).
     pub uart_trace: bool,
+    /// Force the UART status word (debug only).
+    pub uart_force: Option<u32>,
     /// Zero pages mapped on demand for stray accesses (64 KiB each).
     pub extra: HashMap<u32, Vec<u8>>,
     pub unmapped: Vec<(u32, u32)>,
@@ -394,6 +396,7 @@ impl System {
             uart_tx: std::collections::VecDeque::new(),
             uart_is_ram: false,
             uart_trace: false,
+            uart_force: None,
             extra: HashMap::new(),
             unmapped: Vec::new(),
             regs: RegMap::default(),
@@ -1057,6 +1060,9 @@ impl System {
     /// byte is waiting), and bit 13 is the transmit event. The layout comes
     /// from the handler at 0xF80030F0.
     fn uart_status(&self) -> u32 {
+        if let Some(v) = self.uart_force {
+            return v;
+        }
         if self.uart_rx.is_empty() {
             0x2000 | 0x0010
         } else {

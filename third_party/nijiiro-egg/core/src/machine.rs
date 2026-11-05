@@ -515,6 +515,29 @@ impl Machine {
         done
     }
 
+    /// Call one firmware function and restore the interrupted registers.
+    /// Debug helper: a fault leaves the machine stopped.
+    pub fn call_arm(&mut self, func: u32, arg: u32, limit: u64) -> bool {
+        const SENTINEL: u32 = 0xFFFF_FFF0;
+        let saved_r = self.cpu.r;
+        let saved_cpsr = self.cpu.cpsr;
+        let sp = self.cpu.r[13];
+        self.cpu.r[0] = arg;
+        self.cpu.r[13] = (sp.wrapping_sub(0x100)) & !7;
+        self.cpu.r[14] = SENTINEL;
+        self.cpu.r[15] = func & !3;
+        self.cpu.cpsr = (self.cpu.cpsr & !0x20) | 0x80;
+        let mut done = 0u64;
+        while done < limit && self.cpu.r[15] != SENTINEL && self.cpu.fault.is_none() {
+            self.cpu.step(&mut self.sys);
+            done += 1;
+        }
+        let ok = self.cpu.r[15] == SENTINEL && self.cpu.fault.is_none();
+        self.cpu.r = saved_r;
+        self.cpu.cpsr = saved_cpsr;
+        ok
+    }
+
     /// Run until `limit` instructions have been executed (emulated time).
     pub fn run(&mut self, limit: u64) -> Outcome {
         let mut last_window = (0u32, 0u64, 0u64);
