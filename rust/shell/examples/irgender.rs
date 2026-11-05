@@ -26,6 +26,10 @@ fn main() {
     step(&mut s, 15.0);
     s.display_awake(true);
     step(&mut s, 2.0);
+    if text(&mut s).contains("つづきから") {
+        tap(&mut s, 1);
+        step(&mut s, 8.0);
+    }
     if text(&mut s).contains(":") {
         tap(&mut s, 0);
         step(&mut s, 2.0);
