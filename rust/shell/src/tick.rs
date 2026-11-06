@@ -10,7 +10,7 @@ pub const QUANTUM_HIDDEN_S: f64 = 0.05;
 pub const DEADLINE_VISIBLE_MS: u64 = 8;
 pub const DEADLINE_HIDDEN_MS: u64 = 100;
 pub const BACKLOG_EPSILON_S: f64 = 0.000_001;
-pub const CARE_SYNC_BUDGET_S: f64 = 100.0;
+pub const CARE_SYNC_BUDGET_S: f64 = 10.0;
 pub const SHELF_REPLAN_MS: u64 = 600;
 
 pub fn wants_catch_up(dt: f64, now: f64, care_at: f64, paused: bool) -> bool {

@@ -763,6 +763,9 @@ impl Session {
             if self.catchup_total <= 0.0 {
                 self.catchup_total = self.care.due(inp.now_unix);
             }
+            out.catching_up = true;
+            out.remain = self.catchup_total;
+            out.catchup_total = self.catchup_total;
             let remain = self.care_sync(inp.now_unix, CARE_SYNC_BUDGET_S);
             out.remain = remain;
             out.catchup_total = self.catchup_total;

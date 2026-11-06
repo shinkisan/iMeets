@@ -309,14 +309,20 @@ struct ToyView: View {
             Text(english ? "Catching up, please wait…" : "拓麻歌子正在追赶时间，请稍候~")
                 .font(.subheadline.weight(.medium))
                 .multilineTextAlignment(.center)
-            ProgressView(value: shown, total: max(total, 1))
-                .progressViewStyle(.linear)
-                .tint(Color.pmAccent)
-            Text((english ? "Caught up " : "已补齐 ") + catchupText(shown)
-                + (english ? " of " : " / 共 ") + catchupText(total))
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .monospacedDigit()
+            if shown > 0 {
+                ProgressView(value: shown, total: max(total, 1))
+                    .progressViewStyle(.linear)
+                    .tint(Color.pmAccent)
+                Text((english ? "Caught up " : "已补齐 ") + catchupText(shown)
+                    + (english ? " of " : " / 共 ") + catchupText(total))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+            } else {
+                ProgressView()
+                    .controlSize(.regular)
+                    .frame(maxWidth: .infinity)
+            }
         }
         .padding(20)
         .frame(maxWidth: 320)

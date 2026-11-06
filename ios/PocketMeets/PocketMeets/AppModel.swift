@@ -55,6 +55,8 @@ final class AppModel: ObservableObject {
     private var lanCancel: AnyCancellable?
     private var lanAutoStarted = false
     private var cameFromBackground = false
+    private var backgroundedAt: Date?
+    private var catchupProvisional = false
 
     init() {
         lan.engine = engine
@@ -80,6 +82,7 @@ final class AppModel: ObservableObject {
                 self.catchupDone = done
                 self.catchupTotal = total
             }
+            self.catchupProvisional = false
         }
         engine.onCall = { [weak self] _ in
             self?.notice = self?.t("call_body") ?? ""
@@ -174,18 +177,34 @@ final class AppModel: ObservableObject {
         switch phase {
         case .active:
             focused = true
-            let fellBack = engine.watchCare()
-            let sentence = engine.foregroundCare()
-            reload()
-            if !sentence.isEmpty { notice = sentence }
+            let away = backgroundedAt.map { Date().timeIntervalSince($0) } ?? 0
+            backgroundedAt = nil
+            if away > 30, !prefs.care_paused {
+                catchupProvisional = true
+                catchupDone = 0
+                catchupTotal = away
+                DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in
+                    guard let self, self.catchupProvisional else { return }
+                    self.catchupProvisional = false
+                    self.catchupDone = nil
+                    self.catchupTotal = 0
+                }
+            }
+            let missedGap = cameFromBackground
+            cameFromBackground = false
             engine.setVisible(page == .toy || page == .mixing, interactive: true)
             heart?.invalidate()
-            engine.planForecast(visible: true, missedGap: cameFromBackground)
-            cameFromBackground = false
             UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: ["1"])
+            engine.foregroundTasks { [weak self] sentence in
+                guard let self else { return }
+                self.reload()
+                if !sentence.isEmpty { self.notice = sentence }
+                self.engine.planForecast(visible: true, missedGap: missedGap)
+            }
         case .background:
             focused = false
             cameFromBackground = true
+            if backgroundedAt == nil { backgroundedAt = Date() }
             engine.setVisible(false, interactive: false)
             _ = engine.saveNow()
             engine.noteHeartbeat()

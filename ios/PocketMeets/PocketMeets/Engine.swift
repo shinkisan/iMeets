@@ -258,6 +258,18 @@ final class Engine {
         }
     }
 
+    /// Run the foreground watchdog/settings work behind any catch-up
+    /// replay, then hand the notice back on the main thread.
+    func foregroundTasks(_ done: @escaping (String) -> Void) {
+        queue.async {
+            let now = Int64(Date().timeIntervalSince1970 * 1000)
+            _ = self.root.path.withCString { pm_care_watch($0, now) }
+            let text = self.localizedUnlocked(self.root.path.withCString { CString.take(pm_care_foreground($0)) })
+            self.cachedPrefs = nil
+            DispatchQueue.main.async { done(text) }
+        }
+    }
+
     func noteHeartbeat() {
         queue.sync {
             let now = Int64(Date().timeIntervalSince1970 * 1000)
