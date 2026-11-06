@@ -200,6 +200,11 @@ struct ToolbarEditorView: View {
         return config.order.filter { !onBar.contains($0) }
     }
     private var barIsFull: Bool { bar.count >= ToyToolbarAction.maxVisible && ToyToolbarAction.maxVisible > 0 }
+    /// Order-independent key for the card's contents: identical while the
+    /// person drags, different only when a button is added or removed.
+    private var barSignature: String {
+        bar.map(\.rawValue).sorted().joined(separator: ",")
+    }
 
     var body: some View {
         NavigationStack {
@@ -213,6 +218,12 @@ struct ToolbarEditorView: View {
                             row(action)
                         }
                         .onMove { config.moveBar(from: $0, to: $1, available: available) }
+                        // SwiftUI only wires the move handle into rows that
+                        // exist when the section is built, so adding a button
+                        // left the new row without one. Rebuilding the card
+                        // when its membership changes (never on reorder)
+                        // gives every row its handle.
+                        .id(barSignature)
                     }
 
                     if !rest.isEmpty {
