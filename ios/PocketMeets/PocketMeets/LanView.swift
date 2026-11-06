@@ -92,10 +92,26 @@ struct LanView: View {
                     .accessibilityLabel(model.t("back"))
                 }
             }
-            .sheet(isPresented: $scanning) {
-                QrScannerView { code in
-                    scanning = false
-                    model.lan.join(payload: code)
+            .fullScreenCover(isPresented: $scanning) {
+                ZStack(alignment: .topLeading) {
+                    QrScannerView { code in
+                        scanning = false
+                        model.lan.join(payload: code)
+                    }
+                    .ignoresSafeArea()
+
+                    Button {
+                        scanning = false
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 17, weight: .semibold))
+                            .foregroundStyle(.white)
+                            .frame(width: 44, height: 44)
+                            .background(.black.opacity(0.35), in: Circle())
+                    }
+                    .padding(.leading, 20)
+                    .padding(.top, 8)
+                    .accessibilityLabel("关闭")
                 }
             }
             .onAppear {
@@ -132,6 +148,8 @@ final class ScannerController: UIViewController, AVCaptureMetadataOutputObjectsD
     private let onCode: (String) -> Void
     private let session = AVCaptureSession()
     private var preview: AVCaptureVideoPreviewLayer?
+    private var messageLabel: UILabel?
+    private var configured = false
     private var handled = false
 
     init(onCode: @escaping (String) -> Void) {
@@ -147,19 +165,37 @@ final class ScannerController: UIViewController, AVCaptureMetadataOutputObjectsD
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = .black
+        #if targetEnvironment(simulator)
+        showMessage("模拟器没有相机\n请用另一台设备扫码")
+        return
+        #endif
         switch AVCaptureDevice.authorizationStatus(for: .video) {
         case .authorized:
-            setup()
+            configure()
         case .notDetermined:
             AVCaptureDevice.requestAccess(for: .video) { [weak self] granted in
                 DispatchQueue.main.async {
                     guard let self else { return }
-                    granted ? self.setup() : self.message("相机权限未开启")
+                    if granted {
+                        self.configure()
+                    } else {
+                        self.showMessage("相机权限未开启")
+                    }
                 }
             }
         default:
-            message("相机权限未开启")
+            showMessage("相机权限未开启")
         }
+    }
+
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        if configured { start() }
+    }
+
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        if configured { start() }
     }
 
     override func viewDidLayoutSubviews() {
@@ -167,57 +203,96 @@ final class ScannerController: UIViewController, AVCaptureMetadataOutputObjectsD
         preview?.frame = view.bounds
     }
 
-    override func viewWillAppear(_ animated: Bool) {
-        super.viewWillAppear(animated)
-        if !session.inputs.isEmpty {
+    override func viewWillDisappear(_ animated: Bool) {
+        super.viewWillDisappear(animated)
+        if session.isRunning {
             DispatchQueue.global(qos: .userInitiated).async { [session] in
-                session.startRunning()
+                session.stopRunning()
             }
         }
     }
 
-    override func viewWillDisappear(_ animated: Bool) {
-        super.viewWillDisappear(animated)
-        if session.isRunning {
-            session.stopRunning()
+    private func configure() {
+        guard !configured else {
+            start()
+            return
         }
-    }
-
-    private func setup() {
-        guard let device = AVCaptureDevice.default(for: .video),
-              let input = try? AVCaptureDeviceInput(device: device),
-              session.canAddInput(input) else {
-            message("相机不可用")
+        guard let device = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .back)
+                ?? AVCaptureDevice.default(for: .video),
+              let input = try? AVCaptureDeviceInput(device: device) else {
+            showMessage("相机不可用")
+            return
+        }
+        session.beginConfiguration()
+        guard session.canAddInput(input) else {
+            session.commitConfiguration()
+            showMessage("相机不可用")
             return
         }
         session.addInput(input)
         let output = AVCaptureMetadataOutput()
         guard session.canAddOutput(output) else {
-            message("相机不可用")
+            session.commitConfiguration()
+            showMessage("相机不可用")
             return
         }
         session.addOutput(output)
         output.setMetadataObjectsDelegate(self, queue: .main)
         output.metadataObjectTypes = [.qr]
+        session.commitConfiguration()
+
         let layer = AVCaptureVideoPreviewLayer(session: session)
         layer.videoGravity = .resizeAspectFill
         layer.frame = view.bounds
-        view.layer.addSublayer(layer)
+        view.layer.insertSublayer(layer, at: 0)
         preview = layer
+        configured = true
+        start()
     }
 
-    private func message(_ text: String) {
+    private func start() {
+        guard configured, !session.inputs.isEmpty, !session.isRunning else { return }
+        DispatchQueue.global(qos: .userInitiated).async { [session] in
+            session.startRunning()
+        }
+    }
+
+    private func showMessage(_ text: String) {
+        guard messageLabel == nil else { return }
         let label = UILabel()
         label.text = text
+        label.numberOfLines = 0
         label.textColor = .white
         label.font = .preferredFont(forTextStyle: .footnote)
         label.textAlignment = .center
-        label.translatesAutoresizingMaskIntoConstraints = false
-        view.addSubview(label)
+
+        let stack = UIStackView(arrangedSubviews: [label])
+        stack.axis = .vertical
+        stack.spacing = 12
+        stack.alignment = .center
+        stack.translatesAutoresizingMaskIntoConstraints = false
+
+        if text.contains("权限") {
+            let button = UIButton(type: .system)
+            button.setTitle("打开设置", for: .normal)
+            button.setTitleColor(.white, for: .normal)
+            button.addTarget(self, action: #selector(openSettings), for: .touchUpInside)
+            stack.addArrangedSubview(button)
+        }
+
+        view.addSubview(stack)
         NSLayoutConstraint.activate([
-            label.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            label.centerYAnchor.constraint(equalTo: view.centerYAnchor),
+            stack.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            stack.centerYAnchor.constraint(equalTo: view.centerYAnchor),
+            stack.leadingAnchor.constraint(greaterThanOrEqualTo: view.leadingAnchor, constant: 24),
+            stack.trailingAnchor.constraint(lessThanOrEqualTo: view.trailingAnchor, constant: -24),
         ])
+        messageLabel = label
+    }
+
+    @objc private func openSettings() {
+        guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
+        UIApplication.shared.open(url)
     }
 
     func metadataOutput(_ output: AVCaptureMetadataOutput, didOutput metadataObjects: [AVMetadataObject], from connection: AVCaptureConnection) {
@@ -225,7 +300,9 @@ final class ScannerController: UIViewController, AVCaptureMetadataOutputObjectsD
               let object = metadataObjects.first as? AVMetadataMachineReadableCodeObject,
               let code = object.stringValue else { return }
         handled = true
-        if session.isRunning { session.stopRunning() }
+        DispatchQueue.global(qos: .userInitiated).async { [session] in
+            if session.isRunning { session.stopRunning() }
+        }
         onCode(code)
     }
 }
