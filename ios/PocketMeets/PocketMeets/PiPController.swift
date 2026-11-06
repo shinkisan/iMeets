@@ -2,6 +2,7 @@ import AVFoundation
 import AVKit
 import CoreMedia
 import SwiftUI
+import UIKit
 
 /// Hosts the layer that feeds Picture in Picture. It also sits behind the app
 /// content so iOS sees a layer in the window while the video is "playing".
@@ -28,7 +29,6 @@ final class PiPController: NSObject {
 
     private var controller: AVPictureInPictureController?
     private var timer: Timer?
-    private var timebase: CMTimebase?
     private let audio = SilentAudio()
     private let cell = 3
     private let lcd = 128
@@ -42,8 +42,8 @@ final class PiPController: NSObject {
         makeController()
     }
 
-    /// Sample-buffer PiP renders on the layer's clock, so give the layer a
-    /// running timebase and stamp frames with the host clock.
+    /// A running timebase makes the layer count as live playback, which PiP
+    /// needs before the app resigns active.
     private func makeTimebase() {
         var created: CMTimebase?
         CMTimebaseCreateWithSourceClock(
@@ -55,7 +55,6 @@ final class PiPController: NSObject {
         CMTimebaseSetTime(created, time: CMClockGetTime(CMClockGetHostTimeClock()))
         CMTimebaseSetRate(created, rate: 1)
         hostView.displayLayer.controlTimebase = created
-        timebase = created
     }
 
     private func makeController() {
@@ -78,7 +77,9 @@ final class PiPController: NSObject {
         // PiP is unavailable on the Simulator; skip the whole pipeline there.
         guard controller != nil, !isFeeding else { return }
         isFeeding = true
-        // Auto-start must already be enabled before the app backgrounds.
+        // Keep the audio session active while the feature is on: PiP only
+        // reports itself as possible for a playing app.
+        audio.start()
         controller?.canStartPictureInPictureAutomaticallyFromInline = true
         render()
         let timer = Timer(timeInterval: 0.1, repeats: true) { [weak self] _ in
@@ -93,7 +94,6 @@ final class PiPController: NSObject {
     func backgrounding() {
         guard controller != nil else { return }
         startFeeding()
-        audio.start()
         controller?.canStartPictureInPictureAutomaticallyFromInline = true
         // Starting while the app is still in the foreground half of the
         // transition is the only reliable manual call.
@@ -115,12 +115,12 @@ final class PiPController: NSObject {
         if controller?.isPictureInPictureActive == true {
             controller?.stopPictureInPicture()
         }
-        audio.stop()
     }
 
     /// The setting was turned off: stop PiP, the feed and the audio session.
     func shutdown() {
         foregrounded()
+        audio.stop()
         controller?.canStartPictureInPictureAutomaticallyFromInline = false
         guard isFeeding else { return }
         isFeeding = false
@@ -235,11 +235,9 @@ final class PiPController: NSObject {
 }
 
 extension PiPController: AVPictureInPictureControllerDelegate {
-    func pictureInPictureControllerDidStartPictureInPicture(_ controller: AVPictureInPictureController) {
-    }
+    func pictureInPictureControllerDidStartPictureInPicture(_ controller: AVPictureInPictureController) {}
 
-    func pictureInPictureControllerDidStopPictureInPicture(_ controller: AVPictureInPictureController) {
-    }
+    func pictureInPictureControllerDidStopPictureInPicture(_ controller: AVPictureInPictureController) {}
 }
 
 extension PiPController: AVPictureInPictureSampleBufferPlaybackDelegate {
@@ -285,8 +283,12 @@ private final class SilentAudio {
         guard !started else { return }
         started = true
         let session = AVAudioSession.sharedInstance()
-        try? session.setCategory(.playback, mode: .moviePlayback, options: [.mixWithOthers])
-        try? session.setActive(true)
+        do {
+            try session.setCategory(.playback, mode: .moviePlayback, options: [.mixWithOthers])
+            try session.setActive(true)
+        } catch {
+            print("PM-PIP session failed \(error)")
+        }
 
         guard let format = AVAudioFormat(standardFormatWithSampleRate: 44_100, channels: 1) else {
             return
