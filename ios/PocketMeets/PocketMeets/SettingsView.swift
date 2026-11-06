@@ -4,22 +4,31 @@ import UniformTypeIdentifiers
 
 struct SettingsView: View {
     @EnvironmentObject private var model: AppModel
+    @EnvironmentObject private var toolbarConfig: ToolbarConfig
+    @Environment(\.colorScheme) private var colorScheme
     @State private var importingSave = false
     @State private var confirmDelete = false
-    @State private var showLook = false
+    @State private var sheet: SettingsSheet?
     @ScaledMetric(relativeTo: .body) private var iconColumn: CGFloat = 22
     @AppStorage("pm.liveTranslation") private var liveTranslation = false
+
+    private enum SettingsSheet: String, Identifiable {
+        case look
+        case toolbar
+        var id: String { rawValue }
+    }
 
     var body: some View {
         Form {
             Section(model.t("settings_display")) {
-                navRow("paintpalette", model.t("help_look_title"), lookName(model.prefs.appearance)) { showLook = true }
+                navRow("paintpalette", model.t("help_look_title"), lookName(model.prefs.appearance)) { sheet = .look }
                 Toggle(isOn: bind(\.dot_matrix)) { settingLabel("circle.grid.3x3", model.t("dot_matrix_label")) }
                 Toggle(isOn: bind(\.follow_system_sleep)) { settingLabel("sun.max", model.t("keep_display_lit")) }
                 Toggle(isOn: bind(\.screenshots)) { settingLabel("camera", model.t("screenshots_label")) }
                 if #available(iOS 18.0, *) {
                     Toggle(isOn: $liveTranslation) { settingLabel("text.viewfinder", ocrTitle) }
                 }
+                navRow("slider.horizontal.3", editToolbarTitle, toolbarSummary) { sheet = .toolbar }
             }
             Section(model.t("settings_sound")) {
                 Toggle(isOn: soundOn) { settingLabel("speaker.wave.2", model.t("sound_label")) }
@@ -55,7 +64,19 @@ struct SettingsView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar { ToolbarItem(placement: .cancellationAction) { Button { model.page = .toy } label: { Image(systemName: "chevron.backward").font(.system(size: 17, weight: .semibold)) }
                 .accessibilityLabel(model.t("back")) } }
-        .sheet(isPresented: $showLook) { LookSheet() }
+        .sheet(item: $sheet) { which in
+            switch which {
+            case .look:
+                LookSheet()
+            case .toolbar:
+                ToolbarEditorView(
+                    config: toolbarConfig,
+                    available: toolbarAvailable,
+                    lanConnected: model.lan.connected,
+                    english: model.prefs.language == "en"
+                )
+            }
+        }
         .fileImporter(isPresented: $importingSave, allowedContentTypes: [.data]) { result in
             guard case let .success(url) = result else { return }
             guard let path = model.copyFile(from: url, name: "incoming.t18s") else {
@@ -125,6 +146,23 @@ struct SettingsView: View {
 
     private var ocrTitle: String {
         model.prefs.language == "en" ? "Live translation" : "实时翻译"
+    }
+
+    private var editToolbarTitle: String {
+        model.prefs.language == "en" ? "Edit Toolbar" : "编辑顶栏"
+    }
+
+    private var toolbarAvailable: Set<ToyToolbarAction> {
+        ToyToolbarAction.availability(
+            look: ToyLook.resolve(model.prefs, dark: colorScheme == .dark),
+            screenshots: model.prefs.screenshots,
+            cameraReady: model.hasSession && !model.shelfOpen
+        )
+    }
+
+    private var toolbarSummary: String {
+        let count = toolbarConfig.visible(available: toolbarAvailable).count
+        return model.prefs.language == "en" ? "\(count) buttons" : "\(count) 个按钮"
     }
 
     /// Family plus the way its day/night form is picked.

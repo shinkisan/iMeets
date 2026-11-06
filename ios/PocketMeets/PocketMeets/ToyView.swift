@@ -3,9 +3,11 @@ import UIKit
 
 struct ToyView: View {
     @EnvironmentObject private var model: AppModel
+    @EnvironmentObject private var toolbarConfig: ToolbarConfig
     @Environment(\.colorScheme) private var colorScheme
     @State private var exitStart: Date?
     @State private var confirmLanDisconnect = false
+    @State private var showToolbarEditor = false
     @State private var downKeys: Set<Int> = []
     @State private var flashActive = false
     @AppStorage("pm.liveTranslation") private var liveTranslation = false
@@ -16,6 +18,7 @@ struct ToyView: View {
 
     var body: some View {
         let guide = showingGuide
+        let actions = availableActions(guide: guide)
         ZStack {
             backgroundColor.ignoresSafeArea()
             if look == 2 {
@@ -26,7 +29,7 @@ struct ToyView: View {
                 deviceStage
             }
             VStack {
-                toolbar
+                toolbar(actions)
                 Spacer()
             }
             if liveTranslation {
@@ -350,57 +353,171 @@ struct ToyView: View {
             : Locale.Language(identifier: "zh-Hans")
     }
 
-    private var toolbar: some View {
-        HStack {
-            Spacer()
-            if look == 1 || look == 2, model.prefs.screenshots, shutterAllowed(guide: showingGuide) {
-                chromeButton("camera.fill", model.t("screenshots_label")) { model.captureScreen(bypassGuide: false) }
+    private func toolbar(_ available: Set<ToyToolbarAction>) -> some View {
+        HStack(spacing: 8) {
+            Spacer(minLength: 0)
+            ForEach(toolbarConfig.visible(available: available)) { action in
+                toolbarAction(action)
             }
-            if look != 2 {
-                chromeButton(
-                    isNight ? "moon.fill" : "sun.max.fill",
-                    model.t(isNight ? "appearance_night" : "appearance_shell")
-                ) { toggleNight() }
+            moreButton(available)
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 4)
+        .sheet(isPresented: $showToolbarEditor) {
+            ToolbarEditorView(
+                config: toolbarConfig,
+                available: available,
+                lanConnected: model.lan.connected,
+                english: english
+            )
+        }
+    }
+
+    /// Actions the current look can draw. The editor greys out the rest instead
+    /// of dropping them, so a layout survives a look change. Callers pass the
+    /// guide flag in so the engine is asked once per body, not once per button.
+    private func availableActions(guide: Bool) -> Set<ToyToolbarAction> {
+        ToyToolbarAction.availability(
+            look: look,
+            screenshots: model.prefs.screenshots,
+            cameraReady: shutterAllowed(guide: guide)
+        )
+    }
+
+    private var english: Bool { model.prefs.language == "en" }
+
+    @ViewBuilder
+    private func toolbarAction(_ action: ToyToolbarAction) -> some View {
+        switch action {
+        case .camera:
+            chromeButton("camera.fill", model.t("screenshots_label")) {
+                model.captureScreen(bypassGuide: false)
             }
+        case .appearance:
+            chromeButton(
+                isNight ? "moon.fill" : "sun.max.fill",
+                model.t(isNight ? "appearance_night" : "appearance_shell")
+            ) { toggleNight() }
+        case .pause:
             chromeButton(
                 model.prefs.care_paused ? "play.circle" : "pause.circle",
                 model.t(model.prefs.care_paused ? "resume_care" : "pause_care"),
                 active: model.prefs.care_paused
             ) { model.setPaused(!model.prefs.care_paused) }
-            if #available(iOS 18.0, *) {
-                Button {
-                    liveTranslation.toggle()
-                } label: {
-                    Image(systemName: liveTranslation ? "character.bubble.fill" : "character.bubble")
-                        .font(.system(size: 17, weight: .semibold))
-                        .foregroundStyle(chromeColor)
-                        .frame(width: 44, height: 44)
-                        .pmGlass(Circle(), interactive: true)
-                        .contentShape(Circle())
-                }
-                .accessibilityLabel(ocrTitle)
-            }
+        case .translate:
+            translateButton
+        case .lan:
             lanButton
-            chromeButton("ellipsis", model.t("setup_settings")) { model.page = .settings }
         }
-        .padding(.horizontal, 20)
-        .padding(.top, 4)
+    }
+
+    @ViewBuilder
+    private var translateButton: some View {
+        if #available(iOS 18.0, *) {
+            Button {
+                liveTranslation.toggle()
+            } label: {
+                Image(systemName: liveTranslation ? "character.bubble.fill" : "character.bubble")
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(liveTranslation ? Color.pmAccent : chromeColor)
+                    .frame(width: 44, height: 44)
+                    .pmGlass(Circle(), interactive: true)
+                    .contentShape(Circle())
+            }
+            .accessibilityLabel(ocrTitle)
+        }
+    }
+
+    /// More carries whatever did not fit in the bar, then the editing and
+    /// settings entries. Hidden buttons stay reachable from here, as HIG asks.
+    private func moreButton(_ available: Set<ToyToolbarAction>) -> some View {
+        Menu {
+            let extra = toolbarConfig.more(available: available)
+            ForEach(extra) { action in
+                Button {
+                    perform(action)
+                } label: {
+                    Label(moreTitle(action), systemImage: action.symbol)
+                }
+            }
+            if !extra.isEmpty { Divider() }
+            Button {
+                showToolbarEditor = true
+            } label: {
+                Label(english ? "Edit Toolbar" : "编辑顶栏", systemImage: "slider.horizontal.3")
+            }
+            Button {
+                model.page = .settings
+            } label: {
+                Label(model.t("setup_settings"), systemImage: "gearshape")
+            }
+        } label: {
+            ZStack(alignment: .topTrailing) {
+                Image(systemName: "ellipsis")
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(chromeColor)
+                    .frame(width: 44, height: 44)
+                    .pmGlass(Circle(), interactive: true)
+                    .contentShape(Circle())
+                if moreActivity(available) {
+                    Circle()
+                        .fill(Color.pmAccent)
+                        .frame(width: 8, height: 8)
+                        .offset(x: -11, y: 11)
+                }
+            }
+        }
+        .accessibilityLabel(english ? "More" : "更多")
+        .accessibilityHint(english
+            ? "Hidden buttons, edit toolbar and settings"
+            : "隐藏的按钮、编辑顶栏和设置")
+    }
+
+    private func moreTitle(_ action: ToyToolbarAction) -> String {
+        switch action {
+        case .pause:
+            // The menu entry names the action it performs, matching the bar.
+            return model.t(model.prefs.care_paused ? "resume_care" : "pause_care")
+        case .lan where model.lan.connected:
+            return action.title(english) + (english ? " · Connected" : " · 已连接")
+        default:
+            return action.title(english)
+        }
+    }
+
+    /// A dot on More tells the person an action they tucked away is active
+    /// (paused care, running translation, or a live link).
+    private func moreActivity(_ available: Set<ToyToolbarAction>) -> Bool {
+        let extra = Set(toolbarConfig.more(available: available))
+        if extra.contains(.pause), model.prefs.care_paused { return true }
+        if extra.contains(.translate), liveTranslation { return true }
+        if extra.contains(.lan), model.lan.connected { return true }
+        return false
+    }
+
+    private func perform(_ action: ToyToolbarAction) {
+        switch action {
+        case .camera:
+            model.captureScreen(bypassGuide: false)
+        case .appearance:
+            toggleNight()
+        case .pause:
+            model.setPaused(!model.prefs.care_paused)
+        case .translate:
+            if #available(iOS 18.0, *) { liveTranslation.toggle() }
+        case .lan:
+            if model.lan.connected {
+                confirmLanDisconnect = true
+            } else {
+                model.showLan = true
+            }
+        }
     }
 
     /// The look that is actually drawn. "Follow system" only has two
     /// outcomes: the shell look in light mode, night in dark mode.
     private var look: Int {
-        let style = model.prefs.appearance
-        switch style {
-        case 0, 3:
-            guard model.prefs.shell_follow_system else { return style }
-            return colorScheme == .dark ? 3 : 0
-        case 1, 4:
-            guard model.prefs.minimal_follow_system else { return style }
-            return colorScheme == .dark ? 4 : 1
-        default:
-            return style
-        }
+        ToyLook.resolve(model.prefs, dark: colorScheme == .dark)
     }
 
     private var isNight: Bool { look == 3 || look == 4 }

@@ -3,12 +3,14 @@ import SwiftUI
 @main
 struct PocketMeetsApp: App {
     @StateObject private var model = AppModel()
+    @StateObject private var toolbar = ToolbarConfig()
     @Environment(\.scenePhase) private var scenePhase
 
     var body: some Scene {
         WindowGroup {
             RootView()
                 .environmentObject(model)
+                .environmentObject(toolbar)
                 .frame(minWidth: 280, minHeight: 240)
                 .onChange(of: scenePhase) { phase in
                     model.scene(phase)
