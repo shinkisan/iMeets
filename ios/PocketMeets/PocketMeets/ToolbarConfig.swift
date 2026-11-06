@@ -189,6 +189,7 @@ struct ToolbarEditorView: View {
         NavigationStack {
             VStack(spacing: 0) {
                 preview
+                Divider()
                 List {
                     Section {
                         ForEach(config.order) { action in
@@ -197,10 +198,6 @@ struct ToolbarEditorView: View {
                         .onMove { config.move(from: $0, to: $1) }
                     } header: {
                         Text(english ? "Buttons" : "按钮")
-                    } footer: {
-                        Text(english
-                            ? "Drag to reorder. − moves an item to More; + adds it back. The bar holds up to \(ToyToolbarAction.maxVisible)."
-                            : "拖动排序；− 移到更多；+ 加回顶栏。顶栏最多 \(ToyToolbarAction.maxVisible) 个。")
                     }
 
                     Section {
@@ -277,7 +274,7 @@ struct ToolbarEditorView: View {
         }
         .padding(.vertical, 14)
         .frame(maxWidth: .infinity)
-        .background(Color.pmAccent.opacity(0.06))
+        .background(Color(uiColor: .systemGroupedBackground))
     }
 
     private func row(_ action: ToyToolbarAction) -> some View {
@@ -296,10 +293,6 @@ struct ToolbarEditorView: View {
                 Text(action.title(english))
                 if !isAvailable {
                     Text(english ? "Unavailable here" : "当前不可用")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                } else if !onBar {
-                    Text(english ? "In the More menu" : "在“更多”菜单中")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
