@@ -176,6 +176,16 @@ final class ToolbarConfig: ObservableObject {
     }
 }
 
+private struct ToolbarRowFramesKey: PreferenceKey {
+    static var defaultValue: [ToyToolbarAction: CGRect] = [:]
+    static func reduce(
+        value: inout [ToyToolbarAction: CGRect],
+        nextValue: () -> [ToyToolbarAction: CGRect]
+    ) {
+        value.merge(nextValue(), uniquingKeysWith: { $1 })
+    }
+}
+
 struct ToolbarEditorView: View {
     @ObservedObject var config: ToolbarConfig
     let available: Set<ToyToolbarAction>
@@ -184,6 +194,12 @@ struct ToolbarEditorView: View {
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var colorScheme
+
+    @State private var dragging: ToyToolbarAction?
+    @State private var dragStep = 0
+    /// Distance between two row centres; measured so the drag follows the
+    /// finger at any Dynamic Type size.
+    @State private var rowPitch: CGFloat = 66
 
     /// The editor is a sheet, so it follows the system appearance rather than
     /// the toy's night look. Its chrome must match the sheet, not the bar, or
@@ -200,11 +216,6 @@ struct ToolbarEditorView: View {
         return config.order.filter { !onBar.contains($0) }
     }
     private var barIsFull: Bool { bar.count >= ToyToolbarAction.maxVisible && ToyToolbarAction.maxVisible > 0 }
-    /// Order-independent key for the card's contents: identical while the
-    /// person drags, different only when a button is added or removed.
-    private var barSignature: String {
-        bar.map(\.rawValue).sorted().joined(separator: ",")
-    }
 
     var body: some View {
         NavigationStack {
@@ -217,13 +228,6 @@ struct ToolbarEditorView: View {
                         ForEach(bar) { action in
                             row(action)
                         }
-                        .onMove { config.moveBar(from: $0, to: $1, available: available) }
-                        // SwiftUI only wires the move handle into rows that
-                        // exist when the section is built, so adding a button
-                        // left the new row without one. Rebuilding the card
-                        // when its membership changes (never on reorder)
-                        // gives every row its handle.
-                        .id(barSignature)
                     }
 
                     if !rest.isEmpty {
@@ -250,7 +254,13 @@ struct ToolbarEditorView: View {
                         .buttonStyle(.borderless)
                     }
                 }
-                .environment(\.editMode, .constant(.active))
+                .coordinateSpace(name: "toolbarList")
+                .onPreferenceChange(ToolbarRowFramesKey.self) { frames in
+                    let ys = frames.values.map(\.minY).sorted()
+                    guard ys.count > 1 else { return }
+                    let pitch = (ys[ys.count - 1] - ys[0]) / CGFloat(ys.count - 1)
+                    if pitch > 1, abs(pitch - rowPitch) > 0.5 { rowPitch = pitch }
+                }
             }
             .navigationTitle(english ? "Edit Toolbar" : "编辑顶栏")
             .navigationBarTitleDisplayMode(.inline)
@@ -332,8 +342,79 @@ struct ToolbarEditorView: View {
                 }
             }
             Spacer(minLength: 8)
+            if onBar {
+                reorderHandle(action)
+            }
         }
         .opacity(isAvailable ? 1 : 0.55)
+        .background(
+            GeometryReader { geo in
+                Color.clear.preference(
+                    key: ToolbarRowFramesKey.self,
+                    value: [action: geo.frame(in: .named("toolbarList"))]
+                )
+            }
+        )
+    }
+
+    /// Our own handle, so a row can never be added without one. List's
+    /// edit-mode handle is only attached to rows that exist when the section
+    /// is built, which left freshly added buttons undraggable on iOS 27.
+    private func reorderHandle(_ action: ToyToolbarAction) -> some View {
+        Image(systemName: "line.3.horizontal")
+            .font(.system(size: 15, weight: .semibold))
+            .foregroundStyle(.tertiary)
+            .frame(width: 32, height: 44)
+            .contentShape(Rectangle())
+            .highPriorityGesture(reorderGesture(action))
+            .accessibilityLabel(english ? "Reorder" : "调整顺序")
+            .accessibilityAction(named: Text(english ? "Move up" : "上移")) {
+                move(action, by: -1)
+            }
+            .accessibilityAction(named: Text(english ? "Move down" : "下移")) {
+                move(action, by: 1)
+            }
+    }
+
+    private func move(_ action: ToyToolbarAction, by delta: Int) {
+        guard let from = bar.firstIndex(of: action) else { return }
+        let to = min(max(from + delta, 0), bar.count - 1)
+        guard to != from else { return }
+        withAnimation(.easeInOut(duration: 0.16)) {
+            config.moveBar(
+                from: IndexSet(integer: from),
+                to: to > from ? to + 1 : to,
+                available: available
+            )
+        }
+    }
+
+    private func reorderGesture(_ action: ToyToolbarAction) -> some Gesture {
+        DragGesture(minimumDistance: 0)
+            .onChanged { value in
+                if dragging != action {
+                    dragging = action
+                    dragStep = 0
+                }
+                let steps = Int((value.translation.height / max(rowPitch, 1)).rounded())
+                guard steps != dragStep else { return }
+                let delta = steps - dragStep
+                dragStep = steps
+                guard let from = bar.firstIndex(of: action) else { return }
+                let to = min(max(from + delta, 0), bar.count - 1)
+                guard to != from else { return }
+                withAnimation(.easeInOut(duration: 0.16)) {
+                    config.moveBar(
+                        from: IndexSet(integer: from),
+                        to: to > from ? to + 1 : to,
+                        available: available
+                    )
+                }
+            }
+            .onEnded { _ in
+                dragging = nil
+                dragStep = 0
+            }
     }
 
     @ViewBuilder
