@@ -182,6 +182,21 @@ final class PiPController: NSObject {
         }
         CVPixelBufferUnlockBaseAddress(buffer, [])
 
+        // Explicit color tags: the PiP renderer is stricter than the inline
+        // layer and can show an empty frame without them.
+        CVBufferSetAttachment(
+            buffer, kCVImageBufferCGColorSpaceKey,
+            CGColorSpaceCreateDeviceRGB(), .shouldPropagate
+        )
+        CVBufferSetAttachment(
+            buffer, kCVImageBufferColorPrimariesKey,
+            kCVImageBufferColorPrimaries_ITU_R_709_2, .shouldPropagate
+        )
+        CVBufferSetAttachment(
+            buffer, kCVImageBufferTransferFunctionKey,
+            kCVImageBufferTransferFunction_ITU_R_709_2, .shouldPropagate
+        )
+
         var format: CMVideoFormatDescription?
         CMVideoFormatDescriptionCreateForImageBuffer(
             allocator: kCFAllocatorDefault,
