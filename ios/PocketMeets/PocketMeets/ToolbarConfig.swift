@@ -196,7 +196,7 @@ struct ToolbarEditorView: View {
     @Environment(\.colorScheme) private var colorScheme
 
     @State private var dragging: ToyToolbarAction?
-    @State private var dragStep = 0
+    @State private var dragOffset: CGFloat = 0
     /// Distance between two row centres; measured so the drag follows the
     /// finger at any Dynamic Type size.
     @State private var rowPitch: CGFloat = 66
@@ -342,11 +342,18 @@ struct ToolbarEditorView: View {
                 }
             }
             Spacer(minLength: 8)
+        }
+        .opacity(isAvailable ? 1 : 0.55)
+        // The row follows the finger; the order is committed on release so
+        // the gesture survives a multi-row drag.
+        .offset(y: dragging == action ? dragOffset : 0)
+        // An overlay keeps the 44 pt grab area without making rows on the bar
+        // taller than the rows in the card below.
+        .overlay(alignment: .trailing) {
             if onBar {
                 reorderHandle(action)
             }
         }
-        .opacity(isAvailable ? 1 : 0.55)
         .background(
             GeometryReader { geo in
                 Color.clear.preference(
@@ -364,7 +371,7 @@ struct ToolbarEditorView: View {
         Image(systemName: "line.3.horizontal")
             .font(.system(size: 15, weight: .semibold))
             .foregroundStyle(.tertiary)
-            .frame(width: 32, height: 44)
+            .frame(width: 44, height: 44)
             .contentShape(Rectangle())
             .highPriorityGesture(reorderGesture(action))
             .accessibilityLabel(english ? "Reorder" : "调整顺序")
@@ -392,28 +399,23 @@ struct ToolbarEditorView: View {
     private func reorderGesture(_ action: ToyToolbarAction) -> some Gesture {
         DragGesture(minimumDistance: 0)
             .onChanged { value in
-                if dragging != action {
-                    dragging = action
-                    dragStep = 0
-                }
+                dragging = action
+                dragOffset = value.translation.height
+            }
+            .onEnded { value in
                 let steps = Int((value.translation.height / max(rowPitch, 1)).rounded())
-                guard steps != dragStep else { return }
-                let delta = steps - dragStep
-                dragStep = steps
-                guard let from = bar.firstIndex(of: action) else { return }
-                let to = min(max(from + delta, 0), bar.count - 1)
+                let from = bar.firstIndex(of: action) ?? 0
+                let to = min(max(from + steps, 0), bar.count - 1)
+                dragging = nil
+                dragOffset = 0
                 guard to != from else { return }
-                withAnimation(.easeInOut(duration: 0.16)) {
+                withAnimation(.easeInOut(duration: 0.18)) {
                     config.moveBar(
                         from: IndexSet(integer: from),
                         to: to > from ? to + 1 : to,
                         available: available
                     )
                 }
-            }
-            .onEnded { _ in
-                dragging = nil
-                dragStep = 0
             }
     }
 
