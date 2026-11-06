@@ -149,8 +149,18 @@ final class ToolbarConfig: ObservableObject {
         persist()
     }
 
-    func move(from: IndexSet, to: Int) {
-        order.move(fromOffsets: from, toOffset: to)
+    /// Reorder only the buttons on the bar. Hidden actions keep their slots in
+    /// the full order, so re-adding one later does not disturb the bar.
+    func moveBar(from: IndexSet, to: Int, available: Set<ToyToolbarAction>) {
+        var list = visible(available: available)
+        list.move(fromOffsets: from, toOffset: to)
+        let moved = Set(list)
+        var iterator = list.makeIterator()
+        var next = order
+        for index in next.indices where moved.contains(next[index]) {
+            if let action = iterator.next() { next[index] = action }
+        }
+        order = next
         persist()
     }
 
@@ -183,6 +193,12 @@ struct ToolbarEditorView: View {
     }
 
     private var bar: [ToyToolbarAction] { config.visible(available: available) }
+    /// Everything that is not on the bar: hidden actions, overflow and
+    /// actions the current look cannot draw.
+    private var rest: [ToyToolbarAction] {
+        let onBar = Set(bar)
+        return config.order.filter { !onBar.contains($0) }
+    }
     private var barIsFull: Bool { bar.count >= ToyToolbarAction.maxVisible && ToyToolbarAction.maxVisible > 0 }
 
     var body: some View {
@@ -190,14 +206,21 @@ struct ToolbarEditorView: View {
             VStack(spacing: 0) {
                 preview
                 Divider()
+                    .padding(.horizontal, 20)
                 List {
                     Section {
-                        ForEach(config.order) { action in
+                        ForEach(bar) { action in
                             row(action)
                         }
-                        .onMove { config.move(from: $0, to: $1) }
-                    } header: {
-                        Text(english ? "Buttons" : "按钮")
+                        .onMove { config.moveBar(from: $0, to: $1, available: available) }
+                    }
+
+                    if !rest.isEmpty {
+                        Section {
+                            ForEach(rest) { action in
+                                row(action)
+                            }
+                        }
                     }
 
                     Section {
