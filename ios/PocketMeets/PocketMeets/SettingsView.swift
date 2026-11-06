@@ -11,6 +11,7 @@ struct SettingsView: View {
     @State private var sheet: SettingsSheet?
     @ScaledMetric(relativeTo: .body) private var iconColumn: CGFloat = 22
     @AppStorage("pm.liveTranslation") private var liveTranslation = false
+    @AppStorage("pm.pip") private var pipEnabled = false
 
     private enum SettingsSheet: String, Identifiable {
         case look
@@ -37,6 +38,8 @@ struct SettingsView: View {
             Section(model.t("settings_system")) {
                 Toggle(isOn: enhancedBinding) { settingLabel("moon", model.t("residence_toggle")) }
                 Toggle(isOn: pauseBinding) { settingLabel("pause.circle", model.t("pause_care")) }
+                Toggle(isOn: $pipEnabled) { settingLabel("pip", pipTitle) }
+                    .onChange(of: pipEnabled) { on in model.setPiP(on) }
                 Toggle(isOn: bind(\.fast_keys)) { settingLabel("bolt", model.t("fast_keys_label")) }
                     .disabled(!model.engine.usesSweetsFont())
             }
@@ -146,6 +149,10 @@ struct SettingsView: View {
 
     private var ocrTitle: String {
         model.prefs.language == "en" ? "Live translation" : "实时翻译"
+    }
+
+    private var pipTitle: String {
+        model.prefs.language == "en" ? "Picture in Picture" : "后台画中画"
     }
 
     private var editToolbarTitle: String {

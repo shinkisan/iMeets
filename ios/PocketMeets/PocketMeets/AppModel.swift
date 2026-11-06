@@ -20,6 +20,7 @@ enum AppPage: Equatable {
 final class AppModel: ObservableObject {
     let engine = Engine()
     let lan = LanLink()
+    let pip = PiPController()
     @Published var page: AppPage = .setup
     @Published var prefs = Prefs()
     @Published var notice = "" {
@@ -60,6 +61,11 @@ final class AppModel: ObservableObject {
 
     init() {
         lan.engine = engine
+        pip.frameProvider = { [weak self] in
+            guard let self else { return ([], true) }
+            return (self.pixels, self.asleep)
+        }
+        if UserDefaults.standard.bool(forKey: "pm.pip") { pip.startFeeding() }
         lanCancel = lan.objectWillChange.sink { [weak self] _ in
             Task { @MainActor in self?.objectWillChange.send() }
         }
@@ -176,6 +182,7 @@ final class AppModel: ObservableObject {
     func scene(_ phase: ScenePhase) {
         switch phase {
         case .active:
+            pip.foregrounded()
             focused = true
             let away = backgroundedAt.map { Date().timeIntervalSince($0) } ?? 0
             backgroundedAt = nil
@@ -206,6 +213,7 @@ final class AppModel: ObservableObject {
             cameFromBackground = true
             if backgroundedAt == nil { backgroundedAt = Date() }
             engine.setVisible(false, interactive: false)
+            if pipWanted { pip.backgrounded() }
             _ = engine.saveNow()
             engine.noteHeartbeat()
             if prefs.background_care && !prefs.care_paused {
@@ -215,9 +223,29 @@ final class AppModel: ObservableObject {
                 }
             }
             scheduleRefresh()
+        case .inactive:
+            focused = false
+            engine.setVisible(false, interactive: false)
+            // Give the PiP layer a live frame before UIKit moves the app to
+            // the background; starting PiP from the background is too late.
+            if pipWanted { pip.backgrounding() }
         default:
             focused = false
             engine.setVisible(false, interactive: false)
+        }
+    }
+
+    /// The LCD floats in Picture in Picture only when the person enabled it
+    /// and a ROM is actually running.
+    private var pipWanted: Bool {
+        UserDefaults.standard.bool(forKey: "pm.pip") && hasSession
+    }
+
+    func setPiP(_ on: Bool) {
+        if on {
+            pip.startFeeding()
+        } else {
+            pip.shutdown()
         }
     }
 

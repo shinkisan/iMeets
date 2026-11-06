@@ -41,6 +41,14 @@ struct RootView: View {
             .animation(.easeInOut(duration: 0.22), value: model.page)
         }
         .tint(Color.pmAccent)
+        // The layer must live in the window while it is playing, even though
+        // the app's own content covers it.
+        .background(
+            PiPLayerHost(view: model.pip.hostView)
+                .frame(width: 128, height: 128)
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+        )
         .gesture(
             DragGesture(minimumDistance: 24, coordinateSpace: .local).onEnded { value in
                 guard value.startLocation.x < 28, value.translation.width > 70 else { return }
