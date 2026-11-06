@@ -18,7 +18,14 @@ pub fn accept_down(already_down: bool, down: bool) -> bool {
 }
 
 pub fn alarm_copy(exact_allowed: bool) -> &'static str {
-    copy::text(Lang::En, if exact_allowed { "alarm_exact" } else { "alarm_inexact" })
+    copy::text(
+        Lang::En,
+        if exact_allowed {
+            "alarm_exact"
+        } else {
+            "alarm_inexact"
+        },
+    )
 }
 
 #[cfg(test)]

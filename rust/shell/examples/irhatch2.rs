@@ -45,7 +45,12 @@ fn main() {
     }
     for i in 0..12 {
         step(&mut s, 5.0);
-        println!("wait {}s -> {:?} asleep={}", (i + 1) * 5, text(&mut s), s.asleep());
+        println!(
+            "wait {}s -> {:?} asleep={}",
+            (i + 1) * 5,
+            text(&mut s),
+            s.asleep()
+        );
     }
     let _ = s.save();
 }

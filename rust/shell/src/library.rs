@@ -89,7 +89,9 @@ impl Container {
 }
 
 pub fn has_current_rom(root: &Path) -> bool {
-    fs::metadata(root.join("firmware-v1.bin")).map(|m| m.len() == ROM_BYTES as u64).unwrap_or(false)
+    fs::metadata(root.join("firmware-v1.bin"))
+        .map(|m| m.len() == ROM_BYTES as u64)
+        .unwrap_or(false)
 }
 
 pub fn empty_library_copy() -> &'static str {
@@ -135,7 +137,9 @@ pub fn import_bytes(root: &Path, data: &[u8]) -> Result<ImportReport, String> {
 fn import_reader(root: &Path, mut reader: impl Read, len: u64) -> Result<ImportReport, String> {
     let _ = Container::new(root).ensure();
     let mut magic = [0u8; 4];
-    let n = reader.read(&mut magic).map_err(|_| en("import_failed_again"))?;
+    let n = reader
+        .read(&mut magic)
+        .map_err(|_| en("import_failed_again"))?;
     if n == 0 {
         return Err(en("choose_rom"));
     }
@@ -145,7 +149,9 @@ fn import_reader(root: &Path, mut reader: impl Read, len: u64) -> Result<ImportR
         }
         let mut data = Vec::with_capacity(len.min(zipimp::ROM_MAX_BYTES) as usize);
         data.extend_from_slice(&magic[..n]);
-        reader.read_to_end(&mut data).map_err(|_| en("cannot_read_zip"))?;
+        reader
+            .read_to_end(&mut data)
+            .map_err(|_| en("cannot_read_zip"))?;
         return import_zip(root, &data);
     }
     let chained = std::io::Cursor::new(magic[..n].to_vec()).chain(reader);
@@ -159,7 +165,13 @@ fn import_reader(root: &Path, mut reader: impl Read, len: u64) -> Result<ImportR
 
 fn import_zip(root: &Path, data: &[u8]) -> Result<ImportReport, String> {
     let entries = zipimp::list_zip(data).map_err(zip_msg)?;
-    zipimp::check_limits(&entries, zipimp::ROM_MAX_ENTRIES, zipimp::ROM_MAX_BYTES, Some(zipimp::ROM_MAX_BINS)).map_err(zip_msg)?;
+    zipimp::check_limits(
+        &entries,
+        zipimp::ROM_MAX_ENTRIES,
+        zipimp::ROM_MAX_BYTES,
+        Some(zipimp::ROM_MAX_BINS),
+    )
+    .map_err(zip_msg)?;
     let mut kept: Vec<(String, Vec<u8>)> = Vec::new();
     let mut seen = HashSet::new();
     for ent in &entries {
@@ -195,7 +207,11 @@ fn zip_msg(err: ZipError) -> String {
 fn store_one_image(root: &Path, bytes: &[u8], make_current: bool) -> Result<ImportReport, String> {
     let stem = match rom::classify(bytes) {
         ImageClass::Supported { stem, .. } => stem,
-        ImageClass::NotImage => return Err(rom::native_error(&ImageClass::NotImage).unwrap_or("choose_rom").to_string()),
+        ImageClass::NotImage => {
+            return Err(rom::native_error(&ImageClass::NotImage)
+                .unwrap_or("choose_rom")
+                .to_string())
+        }
         ImageClass::Unsupported => {
             return Err(en("choose_rom"));
         }
@@ -206,13 +222,16 @@ fn store_one_image(root: &Path, bytes: &[u8], make_current: bool) -> Result<Impo
     }
     // `make_current` false is unused. One raw image always becomes current.
     let _ = items;
-    finalize(root, &[(
-        match rom::classify(bytes) {
-            ImageClass::Supported { stem, .. } => stem,
-            _ => return Err(en("choose_rom")),
-        },
-        bytes.to_vec(),
-    )])
+    finalize(
+        root,
+        &[(
+            match rom::classify(bytes) {
+                ImageClass::Supported { stem, .. } => stem,
+                _ => return Err(en("choose_rom")),
+            },
+            bytes.to_vec(),
+        )],
+    )
 }
 
 fn finalize(root: &Path, items: &[(String, Vec<u8>)]) -> Result<ImportReport, String> {
@@ -244,13 +263,20 @@ fn finalize(root: &Path, items: &[(String, Vec<u8>)]) -> Result<ImportReport, St
     } else {
         None
     };
-    Ok(ImportReport { stems, current, notes })
+    Ok(ImportReport {
+        stems,
+        current,
+        notes,
+    })
 }
 
 /// If the current image has a name, copy it into `ROMs/` before replacing it.
 pub fn retain_current(root: &Path) -> Result<(), String> {
     let fw = root.join("firmware-v1.bin");
-    if fs::metadata(&fw).map(|m| m.len() == ROM_BYTES as u64).unwrap_or(false) {
+    if fs::metadata(&fw)
+        .map(|m| m.len() == ROM_BYTES as u64)
+        .unwrap_or(false)
+    {
         let bytes = fs::read(&fw).map_err(|e| e.to_string())?;
         if let ImageClass::Supported { stem, .. } = rom::classify(&bytes) {
             let dest = root.join("ROMs").join(format!("{stem}.bin"));
@@ -286,7 +312,10 @@ pub fn list_library(root: &Path) -> Vec<String> {
     };
     for ent in rd.flatten() {
         let path = ent.path();
-        if fs::metadata(&path).map(|m| m.len() == ROM_BYTES as u64).unwrap_or(false) {
+        if fs::metadata(&path)
+            .map(|m| m.len() == ROM_BYTES as u64)
+            .unwrap_or(false)
+        {
             if let Ok(bytes) = fs::read(&path) {
                 if let ImageClass::Supported { stem, .. } = rom::classify(&bytes) {
                     names.push(stem);
@@ -310,7 +339,13 @@ pub fn remove_stem_saves(saves: &Path, stem: &str) -> std::io::Result<()> {
 
 pub fn save_names(stem: &str) -> [&'static str; 5] {
     let _ = stem;
-    ["autosave.t18s", "game.flash", "game.flash.json", "mixing-return.t18s", "before_import.t18s"]
+    [
+        "autosave.t18s",
+        "game.flash",
+        "game.flash.json",
+        "mixing-return.t18s",
+        "before_import.t18s",
+    ]
 }
 
 #[cfg(test)]
@@ -349,7 +384,11 @@ mod tests {
         assert_eq!(missing_rom_copy(), "Import a ROM first.");
         assert!(selection_becomes_current(1));
         assert!(!selection_becomes_current(2));
-        assert!(should_keep_local(ROM_BYTES as u64, Some("fw_tg18_en_v057_2019-05-13_fairy"), "fw_tg18_en_v057_2019-05-13_fairy"));
+        assert!(should_keep_local(
+            ROM_BYTES as u64,
+            Some("fw_tg18_en_v057_2019-05-13_fairy"),
+            "fw_tg18_en_v057_2019-05-13_fairy"
+        ));
         assert!(!should_keep_local(4, Some("fw"), "fw"));
         assert!(import_len_ok(IMPORT_CAP));
         assert!(!import_len_ok(IMPORT_CAP + 1));
@@ -362,7 +401,10 @@ mod tests {
         fs::write(saves.join("mine/game.flash"), b"flash").unwrap();
         remove_stem_saves(&saves, "mine").unwrap();
         assert!(!saves.join("mine").exists());
-        assert_eq!(fs::read(saves.join("other/autosave.t18s")).unwrap(), b"other-rom");
+        assert_eq!(
+            fs::read(saves.join("other/autosave.t18s")).unwrap(),
+            b"other-rom"
+        );
         let _ = fs::remove_dir_all(&root);
     }
 

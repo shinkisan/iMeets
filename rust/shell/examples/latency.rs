@@ -4,8 +4,8 @@
 //! milliseconds pass before a changed LCD frame is handed to the UI.
 //! cargo run --release --example latency -- ROM SAVES_DIR
 
-use std::path::Path;
 use pocket_meets::session::{PumpIn, Session};
+use std::path::Path;
 
 fn tick(s: &mut Session, inp: &mut PumpIn) -> bool {
     inp.frame_ns = inp.monotonic_ms * 1_000_000;

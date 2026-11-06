@@ -9,10 +9,18 @@ use crate::appearance::{self, GUIDE_COMPLETE};
 use crate::copy::Lang;
 use crate::identity::BUILD;
 
-fn zh() -> String { "zh".into() }
-fn jp() -> String { "jp".into() }
-fn scale() -> i32 { 100 }
-fn yes() -> bool { true }
+fn zh() -> String {
+    "zh".into()
+}
+fn jp() -> String {
+    "jp".into()
+}
+fn scale() -> i32 {
+    100
+}
+fn yes() -> bool {
+    true
+}
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct Settings {
@@ -146,7 +154,15 @@ pub struct CarePlan {
 
 impl CarePlan {
     pub fn new() -> Self {
-        Self { heartbeat: 0, epoch: 0, cursor: String::new(), past: String::new(), event: 0, retry: 0, not_before: 0 }
+        Self {
+            heartbeat: 0,
+            epoch: 0,
+            cursor: String::new(),
+            past: String::new(),
+            event: 0,
+            retry: 0,
+            not_before: 0,
+        }
     }
 
     pub fn invalidate(&mut self) {
@@ -159,7 +175,9 @@ impl CarePlan {
 }
 
 impl Default for CarePlan {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 pub fn load_settings(path: &Path) -> Settings {
@@ -168,9 +186,12 @@ pub fn load_settings(path: &Path) -> Settings {
         return Settings::new_user();
     }
     let value: Value = serde_json::from_str(&text).unwrap_or(Value::Null);
-    let mut s = serde_json::from_value::<Settings>(value.clone()).unwrap_or_else(|_| Settings::new_user());
+    let mut s =
+        serde_json::from_value::<Settings>(value.clone()).unwrap_or_else(|_| Settings::new_user());
     if let Some(obj) = value.as_object() {
-        if !obj.contains_key("appearance") && obj.get("minimal_ui").and_then(|v| v.as_bool()) == Some(true) {
+        if !obj.contains_key("appearance")
+            && obj.get("minimal_ui").and_then(|v| v.as_bool()) == Some(true)
+        {
             s.appearance = 1;
         }
         if obj.contains_key("small_screen_scale") {
@@ -195,7 +216,9 @@ pub fn load_settings(path: &Path) -> Settings {
 
 pub fn store_settings(path: &Path, incoming: &str) -> Result<Settings, String> {
     let value: Value = serde_json::from_str(incoming).map_err(|_| "invalid JSON".to_string())?;
-    let obj = value.as_object().ok_or_else(|| "invalid JSON".to_string())?;
+    let obj = value
+        .as_object()
+        .ok_or_else(|| "invalid JSON".to_string())?;
     if let Some(lang) = obj.get("language").and_then(|v| v.as_str()) {
         if Lang::parse(lang).is_none() {
             return Err("language must be zh or en".into());
@@ -227,7 +250,10 @@ pub fn store_settings(path: &Path, incoming: &str) -> Result<Settings, String> {
 }
 
 pub fn load_plan(path: &Path) -> CarePlan {
-    fs::read_to_string(path).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_else(CarePlan::new)
+    fs::read_to_string(path)
+        .ok()
+        .and_then(|t| serde_json::from_str(&t).ok())
+        .unwrap_or_else(CarePlan::new)
 }
 
 pub fn store_plan(path: &Path, plan: &CarePlan) -> Result<(), String> {
@@ -345,7 +371,11 @@ mod tests {
         assert!(err.contains("zh or en"));
         let err = store_settings(&path, r#"{"shelf_language":"zh"}"#).unwrap_err();
         assert!(err.contains("jp or en"));
-        let s = store_settings(&path, r#"{"language":"zh","shelf_language":"en","screenshots":true}"#).unwrap();
+        let s = store_settings(
+            &path,
+            r#"{"language":"zh","shelf_language":"en","screenshots":true}"#,
+        )
+        .unwrap();
         assert_eq!(s.language, "zh");
         assert_eq!(s.shelf_language, "en");
         assert!(s.screenshots);

@@ -54,6 +54,9 @@ pub struct PumpIn {
     pub follow_system_sleep: bool,
     pub muted: bool,
     pub frame_ns: u64,
+    /// Picture in Picture is showing the LCD. Publish frames even when the
+    /// toy page itself is hidden, without turning foreground audio back on.
+    pub present: bool,
 }
 
 impl Default for PumpIn {
@@ -71,6 +74,7 @@ impl Default for PumpIn {
             follow_system_sleep: false,
             muted: false,
             frame_ns: 0,
+            present: false,
         }
     }
 }
@@ -150,10 +154,22 @@ impl Session {
     pub fn bare(image: Vec<u8>) -> Self {
         let image = Arc::new(image);
         let machine = Machine::new(image.clone(), &image, 0.0);
-        Self::from_parts(machine, image, "bare".into(), "Fairy (EN v057)".into(), false)
+        Self::from_parts(
+            machine,
+            image,
+            "bare".into(),
+            "Fairy (EN v057)".into(),
+            false,
+        )
     }
 
-    fn from_parts(mut machine: Machine, image: Arc<Vec<u8>>, stem: String, title: String, playable: bool) -> Self {
+    fn from_parts(
+        mut machine: Machine,
+        image: Arc<Vec<u8>>,
+        stem: String,
+        title: String,
+        playable: bool,
+    ) -> Self {
         machine.stop_on_bluetooth = true;
         Self {
             machine,
@@ -196,7 +212,11 @@ impl Session {
     /// them in SRAM, and only when every byte still matches what we expect.
     pub fn set_fast_keys(&mut self, on: bool) {
         self.fast_keys = on && self.is_sweets();
-        self.min_hold = if self.fast_keys { MIN_HOLD_FAST } else { MIN_HOLD };
+        self.min_hold = if self.fast_keys {
+            MIN_HOLD_FAST
+        } else {
+            MIN_HOLD
+        };
         if !on {
             keypatch::restore(&mut self.machine);
         }
@@ -207,8 +227,10 @@ impl Session {
     }
 
     pub fn open_care(rom: &Path, saves: &Path, paused: bool) -> Result<Self, String> {
-        let file = fs::File::open(rom).map_err(|_| copy::text(Lang::En, "import_failed_again").to_string())?;
-        let bytes = rom::read_candidate(file).map_err(|_| copy::text(Lang::En, "choose_rom").to_string())?;
+        let file = fs::File::open(rom)
+            .map_err(|_| copy::text(Lang::En, "import_failed_again").to_string())?;
+        let bytes = rom::read_candidate(file)
+            .map_err(|_| copy::text(Lang::En, "choose_rom").to_string())?;
         let (stem, title) = match rom::classify(&bytes) {
             ImageClass::Supported { stem, title, .. } => (stem, title),
             ImageClass::NotImage => return Err(copy::text(Lang::En, "err_not_8mib").into()),
@@ -233,7 +255,9 @@ impl Session {
                         }
                     }
                     Ok(None) => {}
-                    Err(SnapError::Mismatch) => return Err(copy::text(Lang::En, "different_rom").into()),
+                    Err(SnapError::Mismatch) => {
+                        return Err(copy::text(Lang::En, "different_rom").into())
+                    }
                     Err(e) => return Err(e.to_string()),
                 }
             }
@@ -258,7 +282,9 @@ impl Session {
         if session.save_dir.join("link-pending").exists() {
             let back = session.save_dir.join("mixing-return.t18s");
             if back.exists() {
-                match Snapshot::load(back.to_str().unwrap_or("")).and_then(|s| s.restore(&mut session.machine)) {
+                match Snapshot::load(back.to_str().unwrap_or(""))
+                    .and_then(|s| s.restore(&mut session.machine))
+                {
                     Ok(()) => {
                         session.machine.stop_on_bluetooth = true;
                         session.link.recovered = true;
@@ -432,7 +458,9 @@ impl Session {
             // is accepted two samples after power-on is dropped and the toy
             // goes straight back to sleep. Keep the patch off until the toy
             // has been awake for a moment.
-            if self.machine.sys.powered_off || self.machine.now() - self.awake_since < KEYPATCH_GRACE {
+            if self.machine.sys.powered_off
+                || self.machine.now() - self.awake_since < KEYPATCH_GRACE
+            {
                 keypatch::restore(&mut self.machine);
             } else {
                 keypatch::apply(&mut self.machine);
@@ -448,7 +476,10 @@ impl Session {
             self.error = copy::text(Lang::En, "emulator_stopped").into();
             return -1;
         }
-        let limit = self.machine.executed.saturating_add((seconds * CPU_HZ) as u64);
+        let limit = self
+            .machine
+            .executed
+            .saturating_add((seconds * CPU_HZ) as u64);
         // A powered-off CPU stays halted. `run` would continue past the
         // power-off instruction, and the LCD would stay on the sleep color
         // because only a cold boot clears `powered_off`.
@@ -469,7 +500,8 @@ impl Session {
     /// hint, a machine that slept anyway is given a B press.
     fn step_while_off(&mut self, limit: u64) -> Outcome {
         let now = self.machine.now();
-        if self.machine.never_sleep && !self.machine.sys.key_script.iter().any(|&(at, _)| at >= now) {
+        if self.machine.never_sleep && !self.machine.sys.key_script.iter().any(|&(at, _)| at >= now)
+        {
             self.machine.press(now, Key::B);
         }
         if !self.machine.power_cycle(limit) {
@@ -511,7 +543,13 @@ impl Session {
         }
         let n = (span * AUDIO_RATE as f64) as usize;
         if n > 0 {
-            self.synth.render(&events, self.audio_t, self.audio_t + span, n, &mut self.pending_pcm);
+            self.synth.render(
+                &events,
+                self.audio_t,
+                self.audio_t + span,
+                n,
+                &mut self.pending_pcm,
+            );
             self.audio_t = t1;
             self.cap_pcm();
         }
@@ -528,7 +566,11 @@ impl Session {
     /// Visible ticks play firmware PCM. Mute is volume 0 and still returns samples.
     fn take_pcm(&mut self, play: bool) -> Vec<i16> {
         let pcm = std::mem::take(&mut self.pending_pcm);
-        if play { pcm } else { Vec::new() }
+        if play {
+            pcm
+        } else {
+            Vec::new()
+        }
     }
 
     /// Feed buzzer events without running the CPU. Used so mute tests can
@@ -540,7 +582,13 @@ impl Session {
         let t0 = events.first().map(|e| e.0).unwrap_or(self.audio_t);
         let t1 = events.last().map(|e| e.0).unwrap_or(t0);
         let n = ((t1 - t0).max(0.0) * AUDIO_RATE as f64) as usize;
-        self.synth.render(events, t0, t1.max(t0), n.max(1).min(AUDIO_RATE as usize * 2), &mut self.pending_pcm);
+        self.synth.render(
+            events,
+            t0,
+            t1.max(t0),
+            n.max(1).min(AUDIO_RATE as usize * 2),
+            &mut self.pending_pcm,
+        );
         self.cap_pcm();
     }
 
@@ -553,7 +601,8 @@ impl Session {
                 -1
             }
             Outcome::Bluetooth | Outcome::Infrared => {
-                let hosted = self.link.classified && link::step_code(true, self.link.web, self.link.kind) == 2;
+                let hosted = self.link.classified
+                    && link::step_code(true, self.link.web, self.link.kind) == 2;
                 if hosted {
                     self.keep_recovery();
                     2
@@ -567,7 +616,11 @@ impl Session {
             }
             Outcome::Crash | Outcome::Stuck => {
                 self.stopped = true;
-                let fault = self.machine.fault().map(|f| format!("{f:?}")).unwrap_or_default();
+                let fault = self
+                    .machine
+                    .fault()
+                    .map(|f| format!("{f:?}"))
+                    .unwrap_or_default();
                 self.error = format!("{} {fault}", copy::text(Lang::En, "emulator_stopped"));
                 -1
             }
@@ -643,9 +696,17 @@ impl Session {
         }
         fs::create_dir_all(&self.save_dir).map_err(|e| e.to_string())?;
         let auto = self.save_dir.join("autosave.t18s");
-        Snapshot::capture(&self.machine).save(auto.to_str().unwrap_or("")).map_err(|e| e.to_string())?;
+        Snapshot::capture(&self.machine)
+            .save(auto.to_str().unwrap_or(""))
+            .map_err(|e| e.to_string())?;
         let flash = self.save_dir.join("game.flash");
-        save::write_machine(&self.machine, flash.to_str().unwrap_or(""), false, self.asleep()).map_err(|e| e.to_string())?;
+        save::write_machine(
+            &self.machine,
+            flash.to_str().unwrap_or(""),
+            false,
+            self.asleep(),
+        )
+        .map_err(|e| e.to_string())?;
         self.care.store(&self.save_dir).map_err(|e| e.to_string())?;
         Ok(())
     }
@@ -662,18 +723,28 @@ impl Session {
         if let Some(parent) = path.parent() {
             let _ = fs::create_dir_all(parent);
         }
-        Snapshot::capture(&self.machine).save(path.to_str().unwrap_or("")).map_err(|e| e.to_string())
+        Snapshot::capture(&self.machine)
+            .save(path.to_str().unwrap_or(""))
+            .map_err(|e| e.to_string())
     }
 
     pub fn import_save(&mut self, path: &Path) -> Result<(), String> {
         let len = fs::metadata(path).map(|m| m.len()).unwrap_or(0);
         if !library::import_len_ok(len) {
-            return Err(format!("{} {}", copy::text(Lang::En, "import_failed"), "file is larger than 32 MiB"));
+            return Err(format!(
+                "{} {}",
+                copy::text(Lang::En, "import_failed"),
+                "file is larger than 32 MiB"
+            ));
         }
         if self.stopped {
-            return Err(format!("{} previous save was preserved", copy::text(Lang::En, "import_failed")));
+            return Err(format!(
+                "{} previous save was preserved",
+                copy::text(Lang::En, "import_failed")
+            ));
         }
-        let bytes = fs::read(path).map_err(|e| format!("{} {e}", copy::text(Lang::En, "import_failed")))?;
+        let bytes =
+            fs::read(path).map_err(|e| format!("{} {e}", copy::text(Lang::En, "import_failed")))?;
         if !self.save_dir.as_os_str().is_empty() {
             let _ = fs::create_dir_all(&self.save_dir);
             let backup = self.save_dir.join("before_import.t18s");
@@ -707,7 +778,11 @@ impl Session {
             return Err(copy::text(Lang::En, "mixing_busy").into());
         }
         self.release_keys();
-        let saves = self.save_dir.parent().map(|p| p.to_path_buf()).unwrap_or_default();
+        let saves = self
+            .save_dir
+            .parent()
+            .map(|p| p.to_path_buf())
+            .unwrap_or_default();
         let stem = self.stem.clone();
         library::remove_stem_saves(&saves, &stem).map_err(|e| e.to_string())?;
         let image = self.image.clone();
@@ -741,7 +816,7 @@ impl Session {
             did_save: false,
             catching_up: false,
             tick: !self.care.paused && !self.stopped,
-            next_ms: tick::deadline_ms(inp.visible, self.link.state),
+            next_ms: tick::deadline_ms(inp.visible, self.link.state, inp.present),
             backlog: inp.backlog,
             remain: 0.0,
             catchup_total: 0.0,
@@ -756,9 +831,15 @@ impl Session {
             return out;
         }
         self.take_call = false;
-        let catch_up = tick::wants_catch_up(inp.dt, inp.now_unix, self.care.care_at, self.care.paused);
+        let catch_up =
+            tick::wants_catch_up(inp.dt, inp.now_unix, self.care.care_at, self.care.paused);
         if catch_up {
             self.catching_up = true;
+            // Replaying the gap with the display held awake runs the pet's
+            // whole absence as live CPU time. That blocks the engine queue:
+            // the window stays black, taps cannot wake the toy, and iOS kills
+            // the process. Let the replay sleep and skip. The hint comes back
+            // on the live tick below.
             self.display_awake(false);
             if self.catchup_total <= 0.0 {
                 self.catchup_total = self.care.due(inp.now_unix);
@@ -766,7 +847,7 @@ impl Session {
             out.catching_up = true;
             out.remain = self.catchup_total;
             out.catchup_total = self.catchup_total;
-            let remain = self.care_sync(inp.now_unix, CARE_SYNC_BUDGET_S);
+            let remain = self.care_sync(inp.now_unix, self.catch_up_budget());
             out.remain = remain;
             out.catchup_total = self.catchup_total;
             if remain < 0.0 {
@@ -775,19 +856,25 @@ impl Session {
                 out.error = self.error.clone();
                 out.tick = false;
                 self.pending_pcm.clear();
+                self.hold_display(inp);
                 return out;
             }
             if remain > 0.001 {
                 out.catching_up = true;
                 out.next_ms = 1;
                 self.pending_pcm.clear();
-                if inp.monotonic_ms.saturating_sub(inp.last_catchup_save_ms) >= tick::CATCHUP_SAVE_MS {
+                if inp.monotonic_ms.saturating_sub(inp.last_catchup_save_ms)
+                    >= tick::CATCHUP_SAVE_MS
+                {
                     if self.save().is_ok() {
                         out.did_save = true;
                         out.last_catchup_save_ms = inp.monotonic_ms;
                         out.last_save_ms = inp.monotonic_ms;
                     }
                 }
+                // Publish the LCD while the replay continues, or the first
+                // paint stays the blank buffer until the gap is gone.
+                self.draw_if_due(inp, &mut out);
                 return out;
             }
             let _ = self.save();
@@ -798,19 +885,33 @@ impl Session {
             self.catchup_total = 0.0;
             out.catchup_total = 0.0;
             out.remain = 0.0;
+            // The live step in this same pump wakes a toy the replay left
+            // powered off, when the person can still see the screen.
+            self.hold_display(inp);
+        } else if self.catching_up {
+            // A slice can land inside the 30s gap, where `wants_catch_up` is
+            // already false. Drop the flag or the shell stays in replay and
+            // never returns to the live hint.
+            self.catching_up = false;
+            self.catchup_total = 0.0;
+            self.hold_display(inp);
         }
         let add = tick::slice_cap(inp.dt);
         out.backlog += add;
         let mut simulated = 0.0;
         while out.backlog > tick::BACKLOG_EPSILON_S {
-            let q = tick::quantum(inp.visible).min(out.backlog);
+            let q = tick::quantum(inp.visible || inp.present).min(out.backlog);
             let code = self.step(q);
             simulated += q;
             out.backlog -= q;
             out.step_code = code;
             if code < 0 {
                 out.stopped = true;
-                out.error = format!("{} {}", copy::text(Lang::En, "emulator_stopped"), self.error);
+                out.error = format!(
+                    "{} {}",
+                    copy::text(Lang::En, "emulator_stopped"),
+                    self.error
+                );
                 out.tick = false;
                 self.pending_pcm.clear();
                 break;
@@ -841,29 +942,49 @@ impl Session {
         out.take_call = self.take_call;
         out.play_audio = inp.visible;
         out.pcm = self.take_pcm(inp.visible);
-        let hint = tick::display_hint(
-            inp.visible,
-            !self.stopped,
-            !self.catching_up,
-            self.care.paused,
-            inp.follow_system_sleep,
-            inp.phone_interactive,
-        );
-        self.display_awake(hint);
+        self.hold_display(inp);
         self.draw_if_due(inp, &mut out);
-        if inp.monotonic_ms.saturating_sub(out.last_save_ms) >= tick::AUTOSAVE_MS && !self.save_dir.as_os_str().is_empty() {
+        if inp.monotonic_ms.saturating_sub(out.last_save_ms) >= tick::AUTOSAVE_MS
+            && !self.save_dir.as_os_str().is_empty()
+        {
             if self.save().is_ok() {
                 out.did_save = true;
                 out.last_save_ms = inp.monotonic_ms;
             }
         }
-        out.next_ms = tick::deadline_ms(inp.visible, self.link.state);
+        out.next_ms = tick::deadline_ms(inp.visible, self.link.state, inp.present);
         out.catching_up = self.catching_up;
         out
     }
 
+    /// Awake replay is real CPU work, so a slice stays short enough that a
+    /// tap can get onto the queue. Powered off, the clock just jumps.
+    fn catch_up_budget(&self) -> f64 {
+        if self.machine.sys.powered_off {
+            CARE_SYNC_BUDGET_S
+        } else {
+            0.5
+        }
+    }
+
+    /// `follow_system_sleep` while the toy page or Picture in Picture is up.
+    fn hold_display(&mut self, inp: &PumpIn) {
+        self.display_awake(tick::display_hint(
+            inp.visible,
+            !self.stopped,
+            self.care.paused,
+            inp.follow_system_sleep,
+            inp.phone_interactive,
+            inp.present,
+        ));
+    }
+
     fn draw_if_due(&mut self, inp: &PumpIn, out: &mut PumpOut) {
-        if !inp.visible || inp.frame_ns.saturating_sub(inp.last_frame_ns) < tick::FRAME_NS {
+        // `present` is Picture in Picture. A hidden tick used to return here,
+        // so the floating window kept the one frame captured at backgrounding.
+        if (!inp.visible && !inp.present)
+            || inp.frame_ns.saturating_sub(inp.last_frame_ns) < tick::FRAME_NS
+        {
             return;
         }
         // Only hand over a frame the game actually changed. The old code pulled
@@ -1015,7 +1136,8 @@ impl Session {
             return Err(copy::text(Lang::En, "balance_range").into());
         }
         let current = u32::from_le_bytes(self.machine.sys.sram[off..off + 4].try_into().unwrap());
-        let word = crate::shelf::slots::balance_word(current, add, amount).map_err(|e| e.to_string())?;
+        let word =
+            crate::shelf::slots::balance_word(current, add, amount).map_err(|e| e.to_string())?;
         let bytes = word.to_le_bytes();
         self.apply_edits(&[Edit::Write(crate::shelf::slots::MemWrite {
             address: crate::shelf::slots::SRAM_BASE + off as u32,
@@ -1027,7 +1149,12 @@ impl Session {
     pub fn marry(&mut self, choices: &shelf::Choices) -> Result<shelf::MarriagePlan, String> {
         self.refuse_shelf()?;
         let sigs = shelf::locate_firmware(&self.image).ok();
-        let plan = shelf::marriage::marriage_plan(&self.machine.sys.sram, &cpu_bytes(&self.machine), sigs, choices)?;
+        let plan = shelf::marriage::marriage_plan(
+            &self.machine.sys.sram,
+            &cpu_bytes(&self.machine),
+            sigs,
+            choices,
+        )?;
         self.apply_edits(&plan.edits)?;
         Ok(plan)
     }
@@ -1054,7 +1181,10 @@ impl Session {
         self.release_keys();
         if let Err(e) = self.save() {
             self.switching = false;
-            return Err(format!("{} {e}", copy::text(Lang::En, "switch_save_prefix")));
+            return Err(format!(
+                "{} {e}",
+                copy::text(Lang::En, "switch_save_prefix")
+            ));
         }
         let class = rom::classify(bytes);
         let (stem, title) = match class {
@@ -1070,19 +1200,27 @@ impl Session {
         };
         let old_title = self.title.clone();
         let old_dir = self.save_dir.clone();
-        if crate::care::outgoing_should_pause(&old_title, &title) && !old_dir.as_os_str().is_empty() {
+        if crate::care::outgoing_should_pause(&old_title, &title) && !old_dir.as_os_str().is_empty()
+        {
             let _ = crate::care::pause_folder(&old_dir, tg18::unix_now());
         }
         if !self.root.as_os_str().is_empty() {
             if let Err(e) = library::retain_current(&self.root) {
                 self.switching = false;
-                return Err(format!("{} {e}", copy::text(Lang::En, "switch_kept_prefix")));
+                return Err(format!(
+                    "{} {e}",
+                    copy::text(Lang::En, "switch_kept_prefix")
+                ));
             }
             if let Err(e) = library::write_atomic(&self.root.join("firmware-v1.bin"), bytes) {
                 self.switching = false;
-                return Err(format!("{} {e}", copy::text(Lang::En, "switch_kept_prefix")));
+                return Err(format!(
+                    "{} {e}",
+                    copy::text(Lang::En, "switch_kept_prefix")
+                ));
             }
-            let _ = library::write_atomic(&self.root.join("ROMs").join(format!("{stem}.bin")), bytes);
+            let _ =
+                library::write_atomic(&self.root.join("ROMs").join(format!("{stem}.bin")), bytes);
         }
         match Self::open_care_bytes(bytes, saves, self.care.paused) {
             Ok(mut fresh) => {
@@ -1093,7 +1231,10 @@ impl Session {
             }
             Err(e) => {
                 self.switching = false;
-                Err(format!("{} {e}", copy::text(Lang::En, "switch_kept_prefix")))
+                Err(format!(
+                    "{} {e}",
+                    copy::text(Lang::En, "switch_kept_prefix")
+                ))
             }
         }
     }
@@ -1199,7 +1340,12 @@ mod tests {
         assert!(!s.machine.alarm_wake);
 
         s.care.set_paused(true, 10.0);
-        let mut inp = PumpIn { now_unix: 10_000.0, dt: 100.0, visible: true, ..PumpIn::default() };
+        let mut inp = PumpIn {
+            now_unix: 10_000.0,
+            dt: 100.0,
+            visible: true,
+            ..PumpIn::default()
+        };
         let out = s.pump(&inp);
         assert!(!out.catching_up);
         assert_eq!(s.machine.executed, 0);
@@ -1245,15 +1391,156 @@ mod tests {
         s.pending_pcm.clear();
         s.ingest_sound(&[(0.0, 440.0, 0.5), (0.05, 0.0, 0.5)]);
         assert!(!s.pending_pcm.is_empty());
-        let heard = s.pump(&PumpIn { visible: true, dt: 0.0, now_unix: 0.0, ..PumpIn::default() });
+        let heard = s.pump(&PumpIn {
+            visible: true,
+            dt: 0.0,
+            now_unix: 0.0,
+            ..PumpIn::default()
+        });
         assert!(heard.play_audio);
         assert!(!heard.pcm.is_empty());
         assert_eq!(heard.volume, 1.0);
         s.ingest_sound(&call_tune());
         assert!(s.take_call);
-        let muted = PumpIn { muted: true, visible: false, ..PumpIn::default() };
+        let muted = PumpIn {
+            muted: true,
+            visible: false,
+            ..PumpIn::default()
+        };
         assert_eq!(if muted.muted { 0.0 } else { 1.0 }, 0.0);
         assert!(s.take_call);
+    }
+
+    #[test]
+    fn picture_in_picture_publishes_frames_without_audio() {
+        let mut s = Session::bare(vec![1, 2, 3, 4]);
+        let hidden = s.pump(&PumpIn {
+            visible: false,
+            present: false,
+            frame_ns: tick::FRAME_NS,
+            ..PumpIn::default()
+        });
+        assert!(!hidden.drew_frame);
+        assert!(!hidden.play_audio);
+        assert_eq!(hidden.next_ms, tick::DEADLINE_HIDDEN_MS);
+
+        let pip = s.pump(&PumpIn {
+            visible: false,
+            present: true,
+            frame_ns: tick::FRAME_NS,
+            ..PumpIn::default()
+        });
+        assert!(pip.drew_frame);
+        assert!(!pip.play_audio);
+        assert_eq!(pip.next_ms, tick::DEADLINE_PRESENT_MS);
+    }
+
+    #[test]
+    fn keep_lit_holds_through_catch_up_and_pip() {
+        let mut watching = Session::bare(vec![0u8; 16]);
+        let catching = watching.pump(&PumpIn {
+            now_unix: 10_000.0,
+            dt: 0.02,
+            visible: true,
+            phone_interactive: true,
+            follow_system_sleep: true,
+            ..PumpIn::default()
+        });
+        assert!(catching.catching_up);
+        assert!(!watching.machine.never_sleep);
+
+        let mut dark = Session::bare(vec![0u8; 16]);
+        let off = dark.pump(&PumpIn {
+            now_unix: 10_000.0,
+            dt: 0.02,
+            visible: true,
+            phone_interactive: true,
+            follow_system_sleep: false,
+            ..PumpIn::default()
+        });
+        assert!(off.catching_up);
+        assert!(!dark.machine.never_sleep);
+
+        let mut pip = Session::bare(vec![0u8; 16]);
+        pip.care = CareTimeline::at(1_000.0);
+        let floating = pip.pump(&PumpIn {
+            now_unix: 1_000.0,
+            dt: 0.0,
+            visible: false,
+            phone_interactive: false,
+            follow_system_sleep: true,
+            present: true,
+            ..PumpIn::default()
+        });
+        assert!(!floating.catching_up);
+        assert!(pip.machine.never_sleep);
+
+        let mut pip_catch = Session::bare(vec![0u8; 16]);
+        let both = pip_catch.pump(&PumpIn {
+            now_unix: 10_000.0,
+            dt: 0.02,
+            visible: false,
+            phone_interactive: false,
+            follow_system_sleep: true,
+            present: true,
+            ..PumpIn::default()
+        });
+        assert!(both.catching_up);
+        assert!(!pip_catch.machine.never_sleep);
+
+        let mut done = Session::bare(vec![0u8; 16]);
+        done.machine.sys.powered_off = true;
+        let mut finished = done.pump(&PumpIn {
+            now_unix: 40.0,
+            dt: 0.0,
+            visible: true,
+            phone_interactive: true,
+            follow_system_sleep: true,
+            ..PumpIn::default()
+        });
+        for _ in 0..8 {
+            if !finished.catching_up {
+                break;
+            }
+            finished = done.pump(&PumpIn {
+                now_unix: 40.0,
+                dt: 0.0,
+                visible: true,
+                phone_interactive: true,
+                follow_system_sleep: true,
+                ..PumpIn::default()
+            });
+        }
+        assert!(!finished.catching_up);
+        assert!(done.machine.never_sleep);
+
+        let mut pip_off = Session::bare(vec![0u8; 16]);
+        pip_off.care = CareTimeline::at(1_000.0);
+        let ignored = pip_off.pump(&PumpIn {
+            now_unix: 1_000.0,
+            dt: 0.0,
+            visible: false,
+            phone_interactive: false,
+            follow_system_sleep: false,
+            present: true,
+            ..PumpIn::default()
+        });
+        assert!(!ignored.catching_up);
+        assert!(!pip_off.machine.never_sleep);
+
+        let mut away = Session::bare(vec![0u8; 16]);
+        away.care = CareTimeline::at(1_000.0);
+        let hidden = away.pump(&PumpIn {
+            now_unix: 1_000.0,
+            dt: 0.0,
+            visible: false,
+            phone_interactive: false,
+            follow_system_sleep: true,
+            present: false,
+            ..PumpIn::default()
+        });
+        assert!(!hidden.catching_up);
+        assert!(!away.machine.never_sleep);
     }
 
     #[test]
@@ -1293,7 +1580,10 @@ mod tests {
         assert!(err.contains("choose a .t18s that matches the current ROM version."));
         assert_eq!(b.machine.sys.ram[16], 0x10);
         assert!(b.save_dir.join("before_import.t18s").exists());
-        assert_eq!(fs::read(saves.join("other/autosave.t18s")).unwrap(), b"other-rom");
+        assert_eq!(
+            fs::read(saves.join("other/autosave.t18s")).unwrap(),
+            b"other-rom"
+        );
 
         b.machine.sys.ram[16] = 0x10;
         let mut same = Session::bare(vec![5, 6, 7, 8]);
@@ -1307,7 +1597,10 @@ mod tests {
 
         b.delete_current_save().unwrap();
         assert!(!saves.join("stem-b/autosave.t18s").exists());
-        assert_eq!(fs::read(saves.join("other/autosave.t18s")).unwrap(), b"other-rom");
+        assert_eq!(
+            fs::read(saves.join("other/autosave.t18s")).unwrap(),
+            b"other-rom"
+        );
 
         let mut blocked = Session::bare(b"KEEP".to_vec());
         blocked.root = root.clone();
@@ -1339,7 +1632,10 @@ mod tests {
         assert_eq!(s.machine.sys.ram[base], b'T');
         assert!(root.join("ShelfBackups/before-shelf.t18s").exists());
         assert!(!root.join("ShelfBackups/before-shelf.t18s.pending").exists());
-        assert_eq!(fs::read(root.join("Saves/other/autosave.t18s")).unwrap(), b"safe");
+        assert_eq!(
+            fs::read(root.join("Saves/other/autosave.t18s")).unwrap(),
+            b"safe"
+        );
 
         let err = s.undo_shelf().unwrap_err();
         assert_eq!(err, "Switch to Sanrio first");
@@ -1356,7 +1652,10 @@ mod tests {
         assert_eq!(s.refuse_shelf().unwrap_err(), "Shelf blocked.");
         s.catching_up = false;
         s.link.state = 3;
-        assert_eq!(s.send_tamago(&meal).unwrap_err(), "finish or cancel Mixing Meets first");
+        assert_eq!(
+            s.send_tamago(&meal).unwrap_err(),
+            "finish or cancel Mixing Meets first"
+        );
         s.link.state = 0;
 
         let err = s.set_balance(false, 10).unwrap_err();
@@ -1424,7 +1723,8 @@ mod tests {
         assert!(
             s.asleep(),
             "firmware did not sleep within {emu}s powered_off={} alarm_wake={}",
-            s.machine.sys.powered_off, s.machine.alarm_wake
+            s.machine.sys.powered_off,
+            s.machine.alarm_wake
         );
         // A simulator tap: down and up before the next quantum.
         s.key(1, true).unwrap();
@@ -1448,12 +1748,16 @@ mod tests {
             let code = s.step(0.05);
             assert!(code >= 0, "post-wake step failed: {}", s.error);
         }
-        assert!(!s.asleep(), "toy went back to sleep within a second of the tap");
+        assert!(
+            !s.asleep(),
+            "toy went back to sleep within a second of the tap"
+        );
         let mut frame = vec![0u32; 16384];
         s.frame(&mut frame);
         assert!(frame.iter().any(|p| *p != 0xFF29_2B2A));
         let _ = fs::remove_dir_all(&root);
     }
+
     #[test]
     fn paused_care_leaves_the_toy_clock_alone() {
         let now = tg18::unix_now();
@@ -1495,5 +1799,4 @@ mod tests {
         assert!(s.fast_keys);
         assert!((s.min_hold - MIN_HOLD_FAST).abs() < 1e-9);
     }
-
 }

@@ -69,11 +69,20 @@ fn main() {
     let rom = std::env::var("POCKET_MEETS_ROM").expect("POCKET_MEETS_ROM");
     let a_dir = std::env::args().nth(1).expect("a");
     let b_dir = std::env::args().nth(2).expect("b");
-    let secs: f64 = std::env::args().nth(3).map(|v| v.parse().unwrap()).unwrap_or(40.0);
-    let hour: f64 = std::env::args().nth(4).map(|v| v.parse().unwrap()).unwrap_or(10.0);
+    let secs: f64 = std::env::args()
+        .nth(3)
+        .map(|v| v.parse().unwrap())
+        .unwrap_or(40.0);
+    let hour: f64 = std::env::args()
+        .nth(4)
+        .map(|v| v.parse().unwrap())
+        .unwrap_or(10.0);
     let a_keys = std::env::args().nth(5).unwrap_or_default();
     let b_keys = std::env::args().nth(6).unwrap_or_default();
-    let lead: f64 = std::env::args().nth(7).map(|v| v.parse().unwrap()).unwrap_or(0.5);
+    let lead: f64 = std::env::args()
+        .nth(7)
+        .map(|v| v.parse().unwrap())
+        .unwrap_or(0.5);
     let mut a = Session::open_care(Path::new(&rom), Path::new(&a_dir), false).unwrap();
     let mut b = Session::open_care(Path::new(&rom), Path::new(&b_dir), false).unwrap();
     hour_now(&mut a, hour);
@@ -112,7 +121,11 @@ fn main() {
         .map(|i| {
             let mut c = i as u16;
             for _ in 0..8 {
-                c = if c & 1 != 0 { (c >> 1) ^ 0x8408 } else { c >> 1 };
+                c = if c & 1 != 0 {
+                    (c >> 1) ^ 0x8408
+                } else {
+                    c >> 1
+                };
             }
             c
         })
@@ -152,7 +165,12 @@ fn main() {
         if !fa.is_empty() || !fb.is_empty() {
             frames += fa.len() + fb.len();
             if frames < 300 || i % 200 == 0 {
-                eprintln!("t={:5.2} A->B {:02X?} B->A {:02X?}", i as f64 * 0.02, fa, fb);
+                eprintln!(
+                    "t={:5.2} A->B {:02X?} B->A {:02X?}",
+                    i as f64 * 0.02,
+                    fa,
+                    fb
+                );
             }
         }
         if !answered && i > 30 {
@@ -160,7 +178,11 @@ fn main() {
             let ta = pocket_meets::menu_text::read(&px);
             b.frame(&mut px);
             let tb = pocket_meets::menu_text::read(&px);
-            if ta.contains("うけとる") || tb.contains("うけとる") || ta.contains("あげる？") || tb.contains("あげる？") {
+            if ta.contains("うけとる")
+                || tb.contains("うけとる")
+                || ta.contains("あげる？")
+                || tb.contains("あげる？")
+            {
                 eprintln!("i={i} prompt A[{ta}] B[{tb}]");
                 let _ = a.key(1, true);
                 step(&mut a, 0.2);

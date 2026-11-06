@@ -20,13 +20,16 @@ struct OkBody {
 }
 
 fn fail(msg: &str) -> String {
-    serde_json::to_string(&FailBody { ok: false, error: msg }).unwrap_or_else(|_| {
-        format!(r#"{{"ok":false,"error":"{}"}}"#, msg.replace('"', "'"))
+    serde_json::to_string(&FailBody {
+        ok: false,
+        error: msg,
     })
+    .unwrap_or_else(|_| format!(r#"{{"ok":false,"error":"{}"}}"#, msg.replace('"', "'")))
 }
 
 fn ok(result: Value) -> String {
-    serde_json::to_string(&OkBody { ok: true, result }).unwrap_or_else(|_| r#"{"ok":false,"error":"invalid JSON"}"#.into())
+    serde_json::to_string(&OkBody { ok: true, result })
+        .unwrap_or_else(|_| r#"{"ok":false,"error":"invalid JSON"}"#.into())
 }
 
 pub fn control_json(session: Option<&mut Session>, request: Option<&str>) -> String {
@@ -54,7 +57,10 @@ pub fn control_json(session: Option<&mut Session>, request: Option<&str>) -> Str
             "care_paused": session.care.paused,
         })),
         "pause" => {
-            let paused = value.get("paused").and_then(|v| v.as_bool()).unwrap_or(false);
+            let paused = value
+                .get("paused")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false);
             session.control_paused = paused;
             ok(json!({"paused": paused}))
         }
@@ -80,11 +86,14 @@ pub fn control_json(session: Option<&mut Session>, request: Option<&str>) -> Str
 }
 
 fn as_u32(v: &Value) -> Option<u32> {
-    v.as_u64().and_then(|n| u32::try_from(n).ok()).or_else(|| v.as_i64().and_then(|n| u32::try_from(n).ok()))
+    v.as_u64()
+        .and_then(|n| u32::try_from(n).ok())
+        .or_else(|| v.as_i64().and_then(|n| u32::try_from(n).ok()))
 }
 
 fn as_u64_num(v: &Value) -> Option<u64> {
-    v.as_u64().or_else(|| v.as_i64().and_then(|n| u64::try_from(n).ok()))
+    v.as_u64()
+        .or_else(|| v.as_i64().and_then(|n| u64::try_from(n).ok()))
 }
 
 fn read(session: &mut Session, value: &Value) -> String {
@@ -251,7 +260,11 @@ fn bounded_run(session: &mut Session, value: &Value, cmd: &str) -> String {
     if !session.playable {
         return fail(copy::text(Lang::En, "err_unsupported"));
     }
-    let code = if cmd == "advance" { session.step(seconds) } else { session.step(seconds) };
+    let code = if cmd == "advance" {
+        session.step(seconds)
+    } else {
+        session.step(seconds)
+    };
     if code < 0 {
         return fail(&session.error);
     }
@@ -264,12 +277,18 @@ mod tests {
 
     #[test]
     fn limits_and_a_ram_roundtrip() {
-        assert_eq!(control_json(None, None), r#"{"ok":false,"error":"null session or request"}"#);
+        assert_eq!(
+            control_json(None, None),
+            r#"{"ok":false,"error":"null session or request"}"#
+        );
         let mut s = Session::bare(vec![1, 2, 3, 4]);
         assert!(control_json(Some(&mut s), Some("")).contains("null session or request"));
         assert!(control_json(Some(&mut s), None).contains("null session or request"));
 
-        let too_long = control_json(Some(&mut s), Some(r#"{"cmd":"read","address":536870912,"length":65537}"#));
+        let too_long = control_json(
+            Some(&mut s),
+            Some(r#"{"cmd":"read","address":536870912,"length":65537}"#),
+        );
         assert!(too_long.contains("read is at most 65536 bytes"));
         let adv = control_json(Some(&mut s), Some(r#"{"cmd":"advance","seconds":60.1}"#));
         assert!(adv.contains("advance is at most 60 seconds"));
@@ -280,17 +299,29 @@ mod tests {
         let rtc = control_json(Some(&mut s), Some(r#"{"cmd":"clock","seconds":-1}"#));
         assert!(rtc.contains("RTC value stays in a 48-bit range"));
         let huge = (1u64 << 48) as f64;
-        let rtc = control_json(Some(&mut s), Some(&format!(r#"{{"cmd":"clock","seconds":{huge}}}"#)));
+        let rtc = control_json(
+            Some(&mut s),
+            Some(&format!(r#"{{"cmd":"clock","seconds":{huge}}}"#)),
+        );
         assert!(rtc.contains("RTC value stays in a 48-bit range"));
         let key = control_json(Some(&mut s), Some(r#"{"cmd":"key","index":3,"down":true}"#));
         assert!(key.contains("key index is 0, 1, or 2"));
 
-        let wrote = control_json(Some(&mut s), Some(r#"{"cmd":"write","address":536870912,"bytes":[9,8,7,6]}"#));
+        let wrote = control_json(
+            Some(&mut s),
+            Some(r#"{"cmd":"write","address":536870912,"bytes":[9,8,7,6]}"#),
+        );
         assert!(wrote.contains("\"ok\":true"));
-        let read = control_json(Some(&mut s), Some(r#"{"cmd":"read","address":536870912,"length":4}"#));
+        let read = control_json(
+            Some(&mut s),
+            Some(r#"{"cmd":"read","address":536870912,"length":4}"#),
+        );
         assert!(read.contains("[9,8,7,6]"));
 
-        let reg = control_json(Some(&mut s), Some(r#"{"cmd":"register","index":"r14","value":42}"#));
+        let reg = control_json(
+            Some(&mut s),
+            Some(r#"{"cmd":"register","index":"r14","value":42}"#),
+        );
         assert!(reg.contains("\"ok\":true"));
         assert_eq!(s.machine.cpu.r[14], 42);
         control_json(Some(&mut s), Some(r#"{"cmd":"cpsr","value":19}"#));
@@ -302,7 +333,13 @@ mod tests {
         assert!(inspected.contains("Fairy"));
 
         let path = crate::tmpdir("ctl").join("rom.bin");
-        let exp = control_json(Some(&mut s), Some(&format!(r#"{{"cmd":"export_rom","path":"{}"}}"#, path.display())));
+        let exp = control_json(
+            Some(&mut s),
+            Some(&format!(
+                r#"{{"cmd":"export_rom","path":"{}"}}"#,
+                path.display()
+            )),
+        );
         assert!(exp.contains("\"ok\":true"), "{exp}");
         assert_eq!(std::fs::read(&path).unwrap(), vec![1, 2, 3, 4]);
 

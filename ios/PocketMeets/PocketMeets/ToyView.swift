@@ -15,6 +15,9 @@ struct ToyView: View {
     @State private var glyphSource = false
     @State private var fontMatchable: Bool?
     @AppStorage("pm.playerName") private var playerName = ""
+    /// Latest More-menu actions. The menu view itself does not redraw with
+    /// the LCD, so taps read this object instead of a closure frozen earlier.
+    @State private var moreRelay = ToyMoreRelay()
 
     var body: some View {
         let guide = showingGuide
@@ -430,47 +433,30 @@ struct ToyView: View {
 
     /// More carries whatever did not fit in the bar, then the editing and
     /// settings entries. Hidden buttons stay reachable from here, as HIG asks.
+    ///
+    /// The popup is a UIKit menu. SwiftUI's own `Menu` restarts its glass
+    /// morph on every LCD frame, so the open popup flashes. The button keeps
+    /// the same menu object until an entry actually changes.
     private func moreButton(_ available: Set<ToyToolbarAction>) -> some View {
-        Menu {
-            let extra = toolbarConfig.more(available: available)
-            ForEach(extra) { action in
-                Button {
-                    perform(action)
-                } label: {
-                    Label(moreTitle(action), systemImage: action.symbol)
-                }
-            }
-            if !extra.isEmpty { Divider() }
-            Button {
-                showToolbarEditor = true
-            } label: {
-                Label(english ? "Edit Toolbar" : "编辑顶栏", systemImage: "slider.horizontal.3")
-            }
-            Button {
-                model.page = .settings
-            } label: {
-                Label(model.t("setup_settings"), systemImage: "gearshape")
-            }
-        } label: {
-            ZStack(alignment: .topTrailing) {
-                Image(systemName: "ellipsis")
-                    .font(.system(size: 17, weight: .semibold))
-                    .foregroundStyle(chromeColor)
-                    .frame(width: 44, height: 44)
-                    .pmGlass(Circle(), interactive: true)
-                    .contentShape(Circle())
-                if moreActivity(available) {
-                    Circle()
-                        .fill(Color.pmAccent)
-                        .frame(width: 8, height: 8)
-                        .offset(x: -11, y: 11)
-                }
-            }
+        let extra = toolbarConfig.more(available: available)
+        let entries = extra.map { action in
+            ToyMoreEntry(action: action, title: moreTitle(action), symbol: action.symbol)
         }
-        .accessibilityLabel(english ? "More" : "更多")
-        .accessibilityHint(english
-            ? "Hidden buttons, edit toolbar and settings"
-            : "隐藏的按钮、编辑顶栏和设置")
+        moreRelay.perform = { perform($0) }
+        moreRelay.editToolbar = { showToolbarEditor = true }
+        moreRelay.openSettings = { model.page = .settings }
+        return ToyMenuButton(
+            model: ToyMenuModel(
+                entries: entries,
+                activity: moreActivity(available),
+                night: isNight,
+                english: english,
+                editTitle: english ? "Edit Toolbar" : "编辑顶栏",
+                settingsTitle: model.t("setup_settings")
+            ),
+            relay: moreRelay
+        )
+        .frame(width: 44, height: 44)
     }
 
     private func moreTitle(_ action: ToyToolbarAction) -> String {
@@ -896,5 +882,163 @@ private func keyIndex(_ name: String) -> Int? {
     case "s", "\r", "return": return 1
     case "d", "right": return 2
     default: return nil
+    }
+}
+
+private struct ToyMoreEntry: Equatable, Identifiable {
+    let action: ToyToolbarAction
+    let title: String
+    let symbol: String
+    var id: ToyToolbarAction { action }
+}
+
+/// Holds the current More-menu actions. Taps read it so the menu view can
+/// stay still across LCD frames without keeping a stale closure.
+private final class ToyMoreRelay {
+    var perform: (ToyToolbarAction) -> Void = { _ in }
+    var editToolbar: () -> Void = {}
+    var openSettings: () -> Void = {}
+}
+
+private struct ToyMenuModel: Equatable {
+    var entries: [ToyMoreEntry]
+    var activity: Bool
+    var night: Bool
+    var english: Bool
+    var editTitle: String
+    var settingsTitle: String
+}
+
+/// UIKit menu anchored to a glass circle. `render` leaves the presented menu
+/// alone while the LCD republishes frames; replacing `button.menu` on an open
+/// popup is what makes it flash.
+private struct ToyMenuButton: UIViewRepresentable {
+    var model: ToyMenuModel
+    var relay: ToyMoreRelay
+
+    func makeUIView(context: Context) -> ToyMenuHost {
+        let host = ToyMenuHost()
+        host.setContentHuggingPriority(.required, for: .horizontal)
+        host.setContentHuggingPriority(.required, for: .vertical)
+        host.setContentCompressionResistancePriority(.required, for: .horizontal)
+        host.setContentCompressionResistancePriority(.required, for: .vertical)
+        return host
+    }
+
+    func updateUIView(_ host: ToyMenuHost, context: Context) {
+        host.render(model, relay: relay)
+    }
+
+    func sizeThatFits(_ proposal: ProposedViewSize, uiView: ToyMenuHost, context: Context) -> CGSize? {
+        CGSize(width: 44, height: 44)
+    }
+}
+
+private final class ToyMenuHost: UIView {
+    private let button = UIButton(type: .custom)
+    private let badge = UIView()
+    private var rendered: ToyMenuModel?
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        button.showsMenuAsPrimaryAction = true
+        button.preferredMenuElementOrder = .fixed
+        button.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(button)
+        badge.backgroundColor = UIColor(red: 194.0 / 255, green: 84.0 / 255, blue: 121.0 / 255, alpha: 1)
+        badge.layer.cornerRadius = 4
+        badge.isUserInteractionEnabled = false
+        badge.isHidden = true
+        badge.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(badge)
+        NSLayoutConstraint.activate([
+            button.leadingAnchor.constraint(equalTo: leadingAnchor),
+            button.trailingAnchor.constraint(equalTo: trailingAnchor),
+            button.topAnchor.constraint(equalTo: topAnchor),
+            button.bottomAnchor.constraint(equalTo: bottomAnchor),
+            badge.widthAnchor.constraint(equalToConstant: 8),
+            badge.heightAnchor.constraint(equalToConstant: 8),
+            badge.topAnchor.constraint(equalTo: topAnchor, constant: 11),
+            badge.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -11),
+        ])
+    }
+
+    required init?(coder: NSCoder) { nil }
+
+    override var intrinsicContentSize: CGSize { CGSize(width: 44, height: 44) }
+
+    func render(_ model: ToyMenuModel, relay: ToyMoreRelay) {
+        let previous = rendered
+        rendered = model
+        if previous?.night != model.night || button.configuration == nil {
+            button.configuration = Self.chrome(night: model.night)
+        }
+        if previous?.activity != model.activity {
+            badge.isHidden = !model.activity
+        }
+        let menuChanged = previous?.entries != model.entries
+            || previous?.editTitle != model.editTitle
+            || previous?.settingsTitle != model.settingsTitle
+        if menuChanged || button.menu == nil {
+            button.menu = Self.menu(model, relay: relay)
+        }
+        if previous?.english != model.english || button.accessibilityLabel == nil {
+            button.accessibilityLabel = model.english ? "More" : "更多"
+            button.accessibilityHint = model.english
+                ? "Hidden buttons, edit toolbar and settings"
+                : "隐藏的按钮、编辑顶栏和设置"
+        }
+    }
+
+    private static func chrome(night: Bool) -> UIButton.Configuration {
+        let color = UIColor(
+            red: CGFloat(night ? 0xD9 : 0xA5) / 255,
+            green: CGFloat(night ? 0xCD : 0x6F) / 255,
+            blue: CGFloat(night ? 0xF4 : 0x83) / 255,
+            alpha: 1
+        )
+        let image = UIImage(
+            systemName: "ellipsis",
+            withConfiguration: UIImage.SymbolConfiguration(pointSize: 17, weight: .semibold)
+        )
+        if #available(iOS 26.0, *) {
+            var config = UIButton.Configuration.glass()
+            config.image = image
+            config.baseForegroundColor = color
+            config.cornerStyle = .capsule
+            return config
+        }
+        var config = UIButton.Configuration.plain()
+        config.image = image
+        config.baseForegroundColor = color
+        config.background.visualEffect = UIBlurEffect(style: .systemChromeMaterial)
+        config.background.cornerRadius = 22
+        config.cornerStyle = .capsule
+        return config
+    }
+
+    private static func menu(_ model: ToyMenuModel, relay: ToyMoreRelay) -> UIMenu {
+        let actions = model.entries.map { entry in
+            UIAction(title: entry.title, image: UIImage(systemName: entry.symbol)) { _ in
+                relay.perform(entry.action)
+            }
+        }
+        let edit = UIAction(
+            title: model.editTitle,
+            image: UIImage(systemName: "slider.horizontal.3")
+        ) { _ in
+            relay.editToolbar()
+        }
+        let settings = UIAction(
+            title: model.settingsTitle,
+            image: UIImage(systemName: "gearshape")
+        ) { _ in
+            relay.openSettings()
+        }
+        let tail = UIMenu(options: .displayInline, children: [edit, settings])
+        let children: [UIMenuElement] = actions.isEmpty
+            ? [tail]
+            : [UIMenu(options: .displayInline, children: actions), tail]
+        return UIMenu(children: children)
     }
 }

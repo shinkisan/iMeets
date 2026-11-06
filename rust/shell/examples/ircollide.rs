@@ -43,8 +43,8 @@ fn to_comm(s: &mut Session) {
 }
 
 fn main() {
-    let rom = std::env::var("POCKET_MEETS_ROM")
-        .expect("set POCKET_MEETS_ROM to a Sweets v062 dump");
+    let rom =
+        std::env::var("POCKET_MEETS_ROM").expect("set POCKET_MEETS_ROM to a Sweets v062 dump");
     let rom = PathBuf::from(rom);
     let da = std::env::args().nth(1).expect("save A");
     let db = std::env::args().nth(2).expect("save B");
@@ -121,13 +121,24 @@ fn main() {
     let _ = a.save();
     let _ = b.save();
     if let Some(f) = &obex_frame {
-        println!("first OBEX frame ({} bytes): {:02X?}", f.len(), &f[..f.len().min(48)]);
+        println!(
+            "first OBEX frame ({} bytes): {:02X?}",
+            f.len(),
+            &f[..f.len().min(48)]
+        );
     }
     if let Some(f) = &tama_frame {
-        println!("first TAMA frame ({} bytes): {:02X?}", f.len(), &f[..f.len().min(48)]);
+        println!(
+            "first TAMA frame ({} bytes): {:02X?}",
+            f.len(),
+            &f[..f.len().min(48)]
+        );
     }
     let scan = |name: &str, bytes: &[u8]| {
-        let soi = bytes.windows(3).filter(|w| *w == [0xFF, 0xD8, 0xFF]).count();
+        let soi = bytes
+            .windows(3)
+            .filter(|w| *w == [0xFF, 0xD8, 0xFF])
+            .count();
         let eoi = bytes.windows(2).filter(|w| *w == [0xFF, 0xD9]).count();
         let first = bytes.windows(3).position(|w| w == [0xFF, 0xD8, 0xFF]);
         let last = bytes.windows(2).rposition(|w| w == [0xFF, 0xD9]);
@@ -135,7 +146,10 @@ fn main() {
             (Some(a), Some(b)) if b > a => Some(b + 2 - a),
             _ => None,
         };
-        println!("{name}: {} bytes, JPEG SOI={soi} EOI={eoi} first_span={span:?}", bytes.len());
+        println!(
+            "{name}: {} bytes, JPEG SOI={soi} EOI={eoi} first_span={span:?}",
+            bytes.len()
+        );
         let _ = std::fs::write(format!("/tmp/{name}.bin"), bytes);
     };
     scan("ir-capture-a", &cap_a);

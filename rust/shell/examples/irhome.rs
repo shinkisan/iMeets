@@ -20,7 +20,10 @@ fn text(s: &mut Session) -> String {
 fn main() {
     let rom = std::env::var("POCKET_MEETS_ROM").expect("POCKET_MEETS_ROM");
     let base = std::env::args().nth(1).expect("save");
-    let hour: f64 = std::env::args().nth(2).map(|v| v.parse().unwrap()).unwrap_or(10.0);
+    let hour: f64 = std::env::args()
+        .nth(2)
+        .map(|v| v.parse().unwrap())
+        .unwrap_or(10.0);
     let tag = std::env::args().nth(3).unwrap_or_else(|| "home".into());
     let mut s = Session::open_care(Path::new(&rom), Path::new(&base), false).unwrap();
     let care = s.care_at();

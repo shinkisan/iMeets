@@ -48,7 +48,13 @@ fn zip_err(e: ZipError) -> String {
 
 pub fn install_pack(root: &Path, zip: &[u8], settings: &mut Settings) -> Result<String, String> {
     let entries = zipimp::list_zip(zip).map_err(zip_err)?;
-    zipimp::check_limits(&entries, zipimp::SHELF_MAX_ENTRIES, zipimp::SHELF_MAX_BYTES, None).map_err(zip_err)?;
+    zipimp::check_limits(
+        &entries,
+        zipimp::SHELF_MAX_ENTRIES,
+        zipimp::SHELF_MAX_BYTES,
+        None,
+    )
+    .map_err(zip_err)?;
     let mut names = Vec::new();
     for e in &entries {
         if zipimp::escapes(&e.name) {
@@ -59,7 +65,10 @@ pub fn install_pack(root: &Path, zip: &[u8], settings: &mut Settings) -> Result<
         }
         names.push(e.name.clone());
     }
-    let nanos = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or(0);
+    let nanos = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or(0);
     let n = PACK_SEQ.fetch_add(1, Ordering::Relaxed);
     let dir_name = format!("pack-{nanos:x}{n:x}");
     let dest = root.join("TamaShelf").join(&dir_name);
@@ -96,13 +105,17 @@ fn extract_and_check(zip: &[u8], entries: &[zipimp::ZipMeta], dest: &Path) -> Re
         }
         fs::write(&path, bytes).map_err(|e| e.to_string())?;
     }
-    let text = fs::read_to_string(dest.join("shelf.json")).map_err(|_| "shelf.json is missing".to_string())?;
-    let value: Value = serde_json::from_str(&text).map_err(|_| "shelf.json is not JSON".to_string())?;
+    let text = fs::read_to_string(dest.join("shelf.json"))
+        .map_err(|_| "shelf.json is missing".to_string())?;
+    let value: Value =
+        serde_json::from_str(&text).map_err(|_| "shelf.json is not JSON".to_string())?;
     validate_manifest(dest, &value)
 }
 
 pub fn validate_manifest(dir: &Path, value: &Value) -> Result<(), String> {
-    let obj = value.as_object().ok_or_else(|| "shelf.json is not JSON".to_string())?;
+    let obj = value
+        .as_object()
+        .ok_or_else(|| "shelf.json is not JSON".to_string())?;
     if obj.get("format").and_then(|v| v.as_str()) != Some("tama-shelf") {
         return Err("shelf format must be tama-shelf".into());
     }
@@ -110,7 +123,10 @@ pub fn validate_manifest(dir: &Path, value: &Value) -> Result<(), String> {
         return Err("shelf version must be 1".into());
     }
     for key in ["items", "parts"] {
-        let arr = obj.get(key).and_then(|v| v.as_array()).ok_or_else(|| format!("{key} must be an array"))?;
+        let arr = obj
+            .get(key)
+            .and_then(|v| v.as_array())
+            .ok_or_else(|| format!("{key} must be an array"))?;
         if arr.len() > 5000 {
             return Err(format!("{key} has more than 5000 elements"));
         }
@@ -131,9 +147,14 @@ pub fn validate_manifest(dir: &Path, value: &Value) -> Result<(), String> {
 /// glyph codes instead of text: letters are ASCII + 0x9F, and four control
 /// codes stand for a space. Without this the shelf shows Latin-1 mojibake.
 fn decode_name(raw: &str) -> String {
-    let high = raw.chars().filter(|c| ('\u{00C0}'..='\u{00FF}').contains(c)).count();
+    let high = raw
+        .chars()
+        .filter(|c| ('\u{00C0}'..='\u{00FF}').contains(c))
+        .count();
     let len = raw.chars().count();
-    let cjk = raw.chars().any(|c| matches!(c as u32, 0x3040..=0x30FF | 0x4E00..=0x9FFF));
+    let cjk = raw
+        .chars()
+        .any(|c| matches!(c as u32, 0x3040..=0x30FF | 0x4E00..=0x9FFF));
     // A single accent is ordinary text; the glyph dump is mostly high bytes.
     if high < 2 || high * 2 < len || cjk {
         return raw.to_string();
@@ -150,9 +171,14 @@ fn decode_name(raw: &str) -> String {
 }
 
 pub fn list_items(pack_dir: &Path, tab: &str, language: &str) -> Result<Vec<Listed>, String> {
-    let text = fs::read_to_string(pack_dir.join("shelf.json")).map_err(|_| copy::text(Lang::En, "load_pack_first").to_string())?;
+    let text = fs::read_to_string(pack_dir.join("shelf.json"))
+        .map_err(|_| copy::text(Lang::En, "load_pack_first").to_string())?;
     let value: Value = serde_json::from_str(&text).map_err(|e| e.to_string())?;
-    let items = value.get("items").and_then(|v| v.as_array()).cloned().unwrap_or_default();
+    let items = value
+        .get("items")
+        .and_then(|v| v.as_array())
+        .cloned()
+        .unwrap_or_default();
     let mut out = Vec::new();
     for el in items {
         let kind = el.get("kind").and_then(|v| v.as_str()).unwrap_or("");
@@ -167,7 +193,11 @@ pub fn list_items(pack_dir: &Path, tab: &str, language: &str) -> Result<Vec<List
             name: decode_name(el.get("name").and_then(|v| v.as_str()).unwrap_or("")),
             kind: kind.to_string(),
             language: lang.to_string(),
-            path: el.get("path").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+            path: el
+                .get("path")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string(),
             id: el.get("id").and_then(|v| v.as_u64()).unwrap_or(0) as u32,
             price: el.get("price").and_then(|v| v.as_u64()).unwrap_or(0) as u32,
         });
@@ -214,11 +244,18 @@ mod tests {
         assert_eq!(names, vec!["meal", "both"]);
         assert!(imports.join("keep.bin").exists());
 
-        let bad = zipimp::zip_stored(&[("shelf.json", br#"{"format":"nope","version":1,"items":[],"parts":[]}"#)]);
+        let bad = zipimp::zip_stored(&[(
+            "shelf.json",
+            br#"{"format":"nope","version":1,"items":[],"parts":[]}"#,
+        )]);
         let err = install_pack(&root, &bad, &mut settings).unwrap_err();
         assert!(err.contains("tama-shelf"));
         assert_eq!(settings.shelf_pack, name);
-        assert!(root.join("TamaShelf").join(&name).join("shelf.json").exists());
+        assert!(root
+            .join("TamaShelf")
+            .join(&name)
+            .join("shelf.json")
+            .exists());
         assert!(imports.join("keep.bin").exists());
 
         let zip2 = zipimp::zip_stored(&[
@@ -268,7 +305,13 @@ mod tests {
             }
         }
         assert!(bad.is_empty(), "{} failed:\n{}", bad.len(), bad.join("\n"));
-        assert_eq!(stations, 4, "parsed {} of {} items", items.len(), items.len());
+        assert_eq!(
+            stations,
+            4,
+            "parsed {} of {} items",
+            items.len(),
+            items.len()
+        );
         let _ = fs::remove_dir_all(&root);
     }
     #[test]

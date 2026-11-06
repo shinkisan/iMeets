@@ -29,7 +29,10 @@ pub struct MixingBle {
 
 impl MixingBle {
     pub fn new() -> Self {
-        Self { connect_started: false, view: BleView::Idle }
+        Self {
+            connect_started: false,
+            view: BleView::Idle,
+        }
     }
 
     pub fn init() -> &'static str {

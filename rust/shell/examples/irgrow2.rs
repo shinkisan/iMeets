@@ -31,13 +31,21 @@ fn tap(s: &mut Session, k: usize) {
 fn main() {
     let rom = std::env::var("POCKET_MEETS_ROM").expect("POCKET_MEETS_ROM");
     let base = std::env::args().nth(1).expect("save");
-    let hours: f64 = std::env::args().nth(2).map(|v| v.parse().unwrap()).unwrap_or(1.0);
+    let hours: f64 = std::env::args()
+        .nth(2)
+        .map(|v| v.parse().unwrap())
+        .unwrap_or(1.0);
     let mut s = Session::open_care(Path::new(&rom), Path::new(&base), false).unwrap();
     step(&mut s, 2.0);
     if s.asleep() {
         tap(&mut s, 1);
     }
-    println!("start asleep={} text={:?} care_at={:.0}", s.asleep(), text(&mut s), s.care_at());
+    println!(
+        "start asleep={} text={:?} care_at={:.0}",
+        s.asleep(),
+        text(&mut s),
+        s.care_at()
+    );
 
     let gap = hours * 3600.0;
     let start = s.care_at() - gap;
@@ -62,7 +70,11 @@ fn main() {
             println!("  replayed {}h", n as f64 * 100.0 / 3600.0);
         }
     }
-    println!("catch-up calls={n} asleep={} text={:?}", s.asleep(), text(&mut s));
+    println!(
+        "catch-up calls={n} asleep={} text={:?}",
+        s.asleep(),
+        text(&mut s)
+    );
     if s.asleep() {
         tap(&mut s, 1);
         step(&mut s, 5.0);

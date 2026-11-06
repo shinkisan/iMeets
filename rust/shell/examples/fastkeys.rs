@@ -1,7 +1,7 @@
 //! Compare button latency and menu walking with and without the fast-key
 //! firmware patch. Usage: fastkeys ROM SAVES [patch]
-use std::path::Path;
 use pocket_meets::session::Session;
+use std::path::Path;
 
 fn hash(s: &mut Session) -> u64 {
     let mut px = [0u32; 16_384];
@@ -16,12 +16,18 @@ fn hash(s: &mut Session) -> u64 {
 
 fn open(rom: &str, saves: &str) -> Session {
     let mut s = Session::open_care(Path::new(rom), Path::new(saves), false).unwrap();
-    for _ in 0..150 { s.step(0.02); }
+    for _ in 0..150 {
+        s.step(0.02);
+    }
     if s.asleep() {
         let _ = s.key(1, true);
-        for _ in 0..20 { s.step(0.02); }
+        for _ in 0..20 {
+            s.step(0.02);
+        }
         let _ = s.key(1, false);
-        for _ in 0..60 { s.step(0.02); }
+        for _ in 0..60 {
+            s.step(0.02);
+        }
     }
     s
 }
@@ -32,18 +38,28 @@ fn down_counter(s: &Session) -> u16 {
 }
 
 fn measure(mut s: Session) -> (Option<u64>, Option<u64>) {
-    for _ in 0..150 { s.step(0.02); }
+    for _ in 0..150 {
+        s.step(0.02);
+    }
     if s.asleep() {
         let _ = s.key(1, true);
-        for _ in 0..20 { s.step(0.02); }
+        for _ in 0..20 {
+            s.step(0.02);
+        }
         let _ = s.key(1, false);
-        for _ in 0..60 { s.step(0.02); }
+        for _ in 0..60 {
+            s.step(0.02);
+        }
     }
     // Open the status menu so the screen is static, then wait for it to settle.
     let _ = s.key(0, true);
-    for _ in 0..20 { s.step(0.02); }
+    for _ in 0..20 {
+        s.step(0.02);
+    }
     let _ = s.key(0, false);
-    for _ in 0..120 { s.step(0.02); }
+    for _ in 0..120 {
+        s.step(0.02);
+    }
 
     let before = hash(&mut s);
     let t0 = s.seconds();
@@ -66,15 +82,23 @@ fn measure(mut s: Session) -> (Option<u64>, Option<u64>) {
 }
 
 fn walk(mut s: Session) -> String {
-    for _ in 0..150 { s.step(0.02); }
-    if s.asleep() { return "asleep".into(); }
+    for _ in 0..150 {
+        s.step(0.02);
+    }
+    if s.asleep() {
+        return "asleep".into();
+    }
     let mut out = Vec::new();
     for _ in 0..8 {
         // A short tap, then let the screen settle.
         let _ = s.key(0, true);
-        for _ in 0..4 { s.step(0.01); }
+        for _ in 0..4 {
+            s.step(0.01);
+        }
         let _ = s.key(0, false);
-        for _ in 0..60 { s.step(0.01); }
+        for _ in 0..60 {
+            s.step(0.01);
+        }
         out.push(format!("{:016X}", hash(&mut s)));
     }
     out.join(" ")
@@ -83,7 +107,10 @@ fn walk(mut s: Session) -> String {
 fn main() {
     let rom = std::env::args().nth(1).unwrap();
     let saves = std::env::args().nth(2).unwrap();
-    let patched = std::env::args().nth(3).map(|v| v == "patch").unwrap_or(false);
+    let patched = std::env::args()
+        .nth(3)
+        .map(|v| v == "patch")
+        .unwrap_or(false);
 
     let mut s = open(&rom, &saves);
     if patched {

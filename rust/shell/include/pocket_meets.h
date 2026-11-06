@@ -66,6 +66,8 @@ typedef struct PmPumpIn {
     int follow_system_sleep;
     int muted;
     unsigned long long frame_ns;
+    /* 1 while Picture in Picture is watching the LCD. Hidden ticks still publish frames. */
+    int present;
 } PmPumpIn;
 
 typedef struct PmPumpOut {
@@ -128,7 +130,7 @@ void pm_release_keys(PmSession *s);
 void pm_set_shelf_open(PmSession *s, int open);
 void pm_display_awake(PmSession *s, int on);
 void pm_set_fast_keys(PmSession *s, int on);
-int pm_display_hint(int visible, int active, int catchup_done, int paused, int follow, int interactive);
+int pm_display_hint(int visible, int active, int paused, int follow, int interactive, int present);
 void pm_frame(PmSession *s, unsigned int *argb16384);
 int pm_take_call(PmSession *s);
 int pm_save(PmSession *s);

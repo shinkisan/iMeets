@@ -23,10 +23,34 @@ pub const TRAMPOLINE_ADDR: u32 = 545_259_520;
 pub const SEX_OFFSET: usize = 262;
 
 pub const PARTS: [PartSpan; 4] = [
-    PartSpan { key: 'B', count: 14, header: 16, pixel: 1024, end: 14416 },
-    PartSpan { key: 'M', count: 19, header: 72, pixel: 14416, end: 21248 },
-    PartSpan { key: 'A', count: 11, header: 148, pixel: 21248, end: 29184 },
-    PartSpan { key: 'K', count: 7, header: 192, pixel: 29184, end: 32768 },
+    PartSpan {
+        key: 'B',
+        count: 14,
+        header: 16,
+        pixel: 1024,
+        end: 14416,
+    },
+    PartSpan {
+        key: 'M',
+        count: 19,
+        header: 72,
+        pixel: 14416,
+        end: 21248,
+    },
+    PartSpan {
+        key: 'A',
+        count: 11,
+        header: 148,
+        pixel: 21248,
+        end: 29184,
+    },
+    PartSpan {
+        key: 'K',
+        count: 7,
+        header: 192,
+        pixel: 29184,
+        end: 32768,
+    },
 ];
 
 #[derive(Clone, Copy, Debug)]
@@ -77,7 +101,9 @@ const MARRIAGE_WORDS: [i32; 12] = [
     -442_556_416,
     -440_258_560,
 ];
-const MARRIAGE_MASKS: [i32; 12] = [-1, -4096, -4096, -1, -1, -4096, -1, -1, -4096, -1, -4096, -1];
+const MARRIAGE_MASKS: [i32; 12] = [
+    -1, -4096, -4096, -1, -1, -4096, -1, -1, -4096, -1, -4096, -1,
+];
 
 fn missing() -> String {
     copy::text(Lang::En, "sigs_unavailable").to_string()
@@ -189,7 +215,12 @@ fn receive_at(image: &[u8], site: usize, marriage_event: i32) -> Result<Option<u
     let Some(h12) = half(image, site + 12) else {
         return Ok(None);
     };
-    if (h0 & 0xFF00) != 19_200 || h2 != 30_875 || h4 != 11_009 || (h6 & 0xFF00) != 53_504 || (h12 & 0xFF00) != 19_200 {
+    if (h0 & 0xFF00) != 19_200
+        || h2 != 30_875
+        || h4 != 11_009
+        || (h6 & 0xFF00) != 53_504
+        || (h12 & 0xFF00) != 19_200
+    {
         return Ok(None);
     }
     let event_at = ((site + 16) & !3) + (h12 as usize & 255) * 4;
@@ -268,7 +299,11 @@ pub fn locate_firmware(image: &[u8]) -> Result<Sigs, String> {
     let _ = find(image, &ramp, None, 4)?;
     let gate = gate_words();
     let _ = find(image, &gate, None, 1)?;
-    Ok(Sigs { parameter, receive_type, marriage_event })
+    Ok(Sigs {
+        parameter,
+        receive_type,
+        marriage_event,
+    })
 }
 
 const DNA: [[[u8; 8]; 4]; 4] = [
@@ -357,7 +392,11 @@ pub fn validate_character(blob: &[u8]) -> Result<(), String> {
     Ok(())
 }
 
-pub fn build_character(indices: [u8; 4], pixels: [Option<&[u8]>; 4], sex: u8) -> Result<Vec<u8>, String> {
+pub fn build_character(
+    indices: [u8; 4],
+    pixels: [Option<&[u8]>; 4],
+    sex: u8,
+) -> Result<Vec<u8>, String> {
     if sex > 1 {
         return Err("character sex byte must be 0 or 1".into());
     }
@@ -385,7 +424,9 @@ pub fn spouse_message() -> Vec<u8> {
     msg[..6].copy_from_slice(b"TAMAGO");
     msg[72..76].copy_from_slice(&(MESSAGE_LEN as u32).to_be_bytes());
     msg[76] = 22;
-    let sum = msg[..MESSAGE_LEN - 2].iter().fold(0u32, |a, b| a.wrapping_add(*b as u32));
+    let sum = msg[..MESSAGE_LEN - 2]
+        .iter()
+        .fold(0u32, |a, b| a.wrapping_add(*b as u32));
     let c = (sum & 0xFFFF) as u16;
     msg[MESSAGE_LEN - 2..].copy_from_slice(&c.to_be_bytes());
     msg
@@ -446,7 +487,9 @@ pub fn marriage_plan(
         return Err("colors must be 0–12".into());
     }
     let p = sigs.parameter as usize;
-    let stage = *sram.get(p + 82).ok_or_else(|| copy::text(Lang::En, "growth_unavailable").to_string())?;
+    let stage = *sram
+        .get(p + 82)
+        .ok_or_else(|| copy::text(Lang::En, "growth_unavailable").to_string())?;
     let flag = *sram.get(p + 12).unwrap_or(&0);
     let state = *sram.get(p + 4).unwrap_or(&0xFF);
     growth_error(stage, flag, state).map_err(|e| e.to_string())?;
@@ -471,14 +514,35 @@ pub fn marriage_plan(
     let mode = u32::from_le_bytes(cpu[64..68].try_into().unwrap());
     let cpsr = mode & !0x20;
     let mut edits = vec![
-        Edit::Write(MemWrite { address: MESSAGE_ADDR, bytes: message }),
-        Edit::Write(MemWrite { address: CHARACTER_ADDR, bytes: character }),
-        Edit::Write(MemWrite { address: CPU_ADDR, bytes: cpu64 }),
-        Edit::Write(MemWrite { address: TRAMPOLINE_ADDR, bytes: trampoline(mode).to_vec() }),
-        Edit::Write(MemWrite { address: crate::shelf::slots::SRAM_BASE + sigs.receive_type, bytes: vec![22] }),
-        Edit::Register { index: 14, value: TRAMPOLINE_ADDR },
+        Edit::Write(MemWrite {
+            address: MESSAGE_ADDR,
+            bytes: message,
+        }),
+        Edit::Write(MemWrite {
+            address: CHARACTER_ADDR,
+            bytes: character,
+        }),
+        Edit::Write(MemWrite {
+            address: CPU_ADDR,
+            bytes: cpu64,
+        }),
+        Edit::Write(MemWrite {
+            address: TRAMPOLINE_ADDR,
+            bytes: trampoline(mode).to_vec(),
+        }),
+        Edit::Write(MemWrite {
+            address: crate::shelf::slots::SRAM_BASE + sigs.receive_type,
+            bytes: vec![22],
+        }),
+        Edit::Register {
+            index: 14,
+            value: TRAMPOLINE_ADDR,
+        },
         Edit::Cpsr(cpsr),
-        Edit::Register { index: 15, value: sigs.marriage_event },
+        Edit::Register {
+            index: 15,
+            value: sigs.marriage_event,
+        },
     ];
     let _ = &mut edits;
     Ok(MarriagePlan { edits, sex, dna })
@@ -527,13 +591,17 @@ mod tests {
         assert!(dna_bytes(2, 0, [11, 13, 0, 1, 2, 3, 4, 5]).unwrap()[1] < 12);
         assert_eq!(growth_error(4, 0, 0), Ok(()));
         assert_eq!(growth_error(4, 0, 1), Ok(()));
-        assert!(growth_error(2, 0x80, 0).unwrap_err().contains("evolution is pending"));
+        assert!(growth_error(2, 0x80, 0)
+            .unwrap_err()
+            .contains("evolution is pending"));
         assert!(growth_error(3, 0, 1).unwrap_err().contains("adult form"));
         assert!(growth_error(0, 0, 0).unwrap_err().contains("adult form"));
         assert_eq!(stage_name(0), Some("Egg"));
         assert_eq!(stage_name(3), Some("Teen"));
         assert!(growth_error(9, 0, 0).unwrap_err().contains("unavailable"));
-        assert!(growth_error(4, 0, 2).unwrap_err().contains("invalid pet state"));
+        assert!(growth_error(4, 0, 2)
+            .unwrap_err()
+            .contains("invalid pet state"));
 
         let mut cpu = adult_cpu();
         assert!(home_screen_ok(&cpu));
@@ -553,7 +621,11 @@ mod tests {
         let plan = marriage_plan(
             &sram,
             &adult_cpu(),
-            Some(Sigs { parameter: 0, receive_type: 20, marriage_event: 0x2000_1000 }),
+            Some(Sigs {
+                parameter: 0,
+                receive_type: 20,
+                marriage_event: 0x2000_1000,
+            }),
             &choices(),
         )
         .unwrap();
@@ -566,7 +638,10 @@ mod tests {
                 assert_eq!(w.bytes.len(), MESSAGE_LEN);
                 assert_eq!(&w.bytes[..6], b"TAMAGO");
                 assert_eq!(w.bytes[76], 22);
-                assert_eq!(u32::from_be_bytes(w.bytes[72..76].try_into().unwrap()), MESSAGE_LEN as u32);
+                assert_eq!(
+                    u32::from_be_bytes(w.bytes[72..76].try_into().unwrap()),
+                    MESSAGE_LEN as u32
+                );
                 // Unknown interior stays zero. Offset 100 is not a specified field.
                 assert_eq!(w.bytes[100], 0);
             }
@@ -574,13 +649,29 @@ mod tests {
         }
         let words = trampoline(19);
         assert_eq!(u32::from_le_bytes(words[0..4].try_into().unwrap()), 19);
-        assert_eq!(u32::from_le_bytes(words[4..8].try_into().unwrap()), CPU_ADDR);
-        assert_eq!(u32::from_le_bytes(words[8..12].try_into().unwrap()), (-442_564_600i32) as u32);
+        assert_eq!(
+            u32::from_le_bytes(words[4..8].try_into().unwrap()),
+            CPU_ADDR
+        );
+        assert_eq!(
+            u32::from_le_bytes(words[8..12].try_into().unwrap()),
+            (-442_564_600i32) as u32
+        );
 
         let mut young = sram.clone();
         young[82] = 1;
         young[12] = 0x80;
-        let err = marriage_plan(&young, &adult_cpu(), Some(Sigs { parameter: 0, receive_type: 1, marriage_event: 1 }), &choices()).unwrap_err();
+        let err = marriage_plan(
+            &young,
+            &adult_cpu(),
+            Some(Sigs {
+                parameter: 0,
+                receive_type: 1,
+                marriage_event: 1,
+            }),
+            &choices(),
+        )
+        .unwrap_err();
         assert!(err.contains("evolution is pending"));
 
         let blob = build_character([1, 2, 3, 4], [None, None, None, None], 0).unwrap();
@@ -620,7 +711,11 @@ mod tests {
             put_word(&mut image, MARRIAGE_AT + n * 4, *word);
         }
         // Low 12 bits select the pool at hit+76. The mask ignores those bits.
-        put_word(&mut image, MARRIAGE_AT + 4, (MARRIAGE_WORDS[1] & -4096) | 64);
+        put_word(
+            &mut image,
+            MARRIAGE_AT + 4,
+            (MARRIAGE_WORDS[1] & -4096) | 64,
+        );
         put_word(&mut image, MARRIAGE_AT + 76, 544_932_864);
         put_word(&mut image, MARRIAGE_AT + 68, -442_564_608 | 32);
         put_word(&mut image, MARRIAGE_AT + 108, 0xF800_0100u32 as i32);
@@ -632,7 +727,11 @@ mod tests {
         put_half(&mut image, RECEIVE_AT + 6, 0xD100);
         put_half(&mut image, RECEIVE_AT + 12, 0x4B01);
         put_word(&mut image, RECEIVE_AT + 16, 0xF800_0014u32 as i32);
-        put_word(&mut image, RECEIVE_AT + 20, (0x2000_0000 + MARRIAGE_AT as u32) as i32);
+        put_word(
+            &mut image,
+            RECEIVE_AT + 20,
+            (0x2000_0000 + MARRIAGE_AT as u32) as i32,
+        );
 
         let (pairs, _) = pair_pattern();
         for (n, word) in pairs.iter().enumerate() {
@@ -676,7 +775,9 @@ mod tests {
         let mut broken_gate = image;
         broken_gate[0x1_3000] = 0;
         assert!(locate_firmware(&broken_gate).is_err());
-        assert!(locate_firmware(&[0; 16]).unwrap_err().contains("shelf signatures"));
+        assert!(locate_firmware(&[0; 16])
+            .unwrap_err()
+            .contains("shelf signatures"));
         assert!(locate_firmware(&vec![0u8; CODE_END]).is_err());
     }
 }

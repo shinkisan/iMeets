@@ -15,11 +15,16 @@ pub struct Chunks {
 
 impl Chunks {
     pub fn get(&self, name: &str) -> Option<&[u8]> {
-        self.items.iter().find(|c| c.0 == name).map(|c| c.1.as_slice())
+        self.items
+            .iter()
+            .find(|c| c.0 == name)
+            .map(|c| c.1.as_slice())
     }
 
     pub fn require(&self, name: &str, len: Option<usize>) -> Result<&[u8], String> {
-        let data = self.get(name).ok_or_else(|| format!("not a valid snapshot: missing {name}"))?;
+        let data = self
+            .get(name)
+            .ok_or_else(|| format!("not a valid snapshot: missing {name}"))?;
         if let Some(n) = len {
             if data.len() != n {
                 return Err(format!("not a valid snapshot: {name} has the wrong size"));
@@ -33,7 +38,8 @@ pub fn read_chunks(data: &[u8]) -> Result<Chunks, String> {
     if !data.starts_with(b"T18SNAP1") {
         return Err("not a valid snapshot: wrong file type".into());
     }
-    let payload = decompress_to_vec_zlib(&data[8..]).map_err(|e| format!("not a valid snapshot: {e:?}"))?;
+    let payload =
+        decompress_to_vec_zlib(&data[8..]).map_err(|e| format!("not a valid snapshot: {e:?}"))?;
     let mut items = Vec::new();
     let mut i = 0;
     while i < payload.len() {
@@ -76,7 +82,9 @@ mod tests {
 
     #[test]
     fn rejects_bad_snapshots() {
-        assert!(read_chunks(b"nope").unwrap_err().contains("not a valid snapshot"));
+        assert!(read_chunks(b"nope")
+            .unwrap_err()
+            .contains("not a valid snapshot"));
         assert!(read_chunks(b"T18SNAP1garbage").is_err());
     }
 }

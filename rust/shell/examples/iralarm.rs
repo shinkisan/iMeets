@@ -10,7 +10,10 @@ fn step(s: &mut Session, sec: f64) {
 fn main() {
     let rom = std::env::var("POCKET_MEETS_ROM").expect("POCKET_MEETS_ROM");
     let base = std::env::args().nth(1).expect("save");
-    let hours: f64 = std::env::args().nth(2).map(|v| v.parse().unwrap()).unwrap_or(1.0);
+    let hours: f64 = std::env::args()
+        .nth(2)
+        .map(|v| v.parse().unwrap())
+        .unwrap_or(1.0);
     let mut s = Session::open_care(Path::new(&rom), Path::new(&base), false).unwrap();
     step(&mut s, 2.0);
     let gap = hours * 3600.0;
@@ -26,7 +29,11 @@ fn main() {
         s.machine.sys.rtc.regs[0x20 + i] = ((alarm >> (8 * i)) & 0xff) as u8;
     }
     s.machine.sys.rtc.regs[0x40] |= 6;
-    println!("alarm set enable={:02X} alarm={alarm} now_ticks={}", s.machine.sys.rtc.regs[0x40], s.machine.sys.rtc.ticks(s.machine.sys.game_time));
+    println!(
+        "alarm set enable={:02X} alarm={alarm} now_ticks={}",
+        s.machine.sys.rtc.regs[0x40],
+        s.machine.sys.rtc.ticks(s.machine.sys.game_time)
+    );
     let now = start + gap;
     let mut n = 0;
     loop {

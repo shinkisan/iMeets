@@ -556,9 +556,9 @@ final class Engine {
         queue.sync { pm_exit_allowed(ready ? 1 : 0, shelf ? 1 : 0, guide ? 1 : 0) != 0 }
     }
 
-    func displayHint(visible: Bool, active: Bool, catchupDone: Bool, paused: Bool, follow: Bool, interactive: Bool) -> Bool {
+    func displayHint(visible: Bool, active: Bool, paused: Bool, follow: Bool, interactive: Bool, present: Bool) -> Bool {
         queue.sync {
-            pm_display_hint(visible ? 1 : 0, active ? 1 : 0, catchupDone ? 1 : 0, paused ? 1 : 0, follow ? 1 : 0, interactive ? 1 : 0) != 0
+            pm_display_hint(visible ? 1 : 0, active ? 1 : 0, paused ? 1 : 0, follow ? 1 : 0, interactive ? 1 : 0, present ? 1 : 0) != 0
         }
     }
 
@@ -596,6 +596,7 @@ final class Engine {
         input.follow_system_sleep = prefs.follow_system_sleep ? 1 : 0
         input.muted = prefs.muted ? 1 : 0
         input.frame_ns = pump.frameNs
+        input.present = pump.pipFrames ? 1 : 0
         var output = PmPumpOut()
         let cap = Int32(pcmBuffer.count)
         pcmBuffer.withUnsafeMutableBufferPointer { raw in
@@ -658,6 +659,12 @@ final class Engine {
             self.pump.visible = visible
             self.pump.interactive = interactive
         }
+    }
+
+    /// Picture in Picture still needs LCD frames after the toy page is hidden.
+    /// Foreground audio stays tied to `setVisible`.
+    func setPipFrames(_ on: Bool) {
+        queue.async { self.pump.pipFrames = on }
     }
 
     private func handleCall(prefs: Prefs, visible: Bool) {
@@ -809,6 +816,7 @@ final class Engine {
 private struct PumpClock {
     var visible = true
     var interactive = true
+    var pipFrames = false
     var monotonic: UInt64 = 0
     var lastFrameNs: UInt64 = 0
     var lastSaveMs: UInt64 = 0

@@ -37,8 +37,14 @@ fn shot(s: &mut Session, tag: &str) {
 fn main() {
     let rom = std::env::var("POCKET_MEETS_ROM").expect("POCKET_MEETS_ROM");
     let base = std::env::args().nth(1).expect("save");
-    let hour: f64 = std::env::args().nth(2).map(|v| v.parse().unwrap()).unwrap_or(10.0);
-    let steps: usize = std::env::args().nth(3).map(|v| v.parse().unwrap()).unwrap_or(24);
+    let hour: f64 = std::env::args()
+        .nth(2)
+        .map(|v| v.parse().unwrap())
+        .unwrap_or(10.0);
+    let steps: usize = std::env::args()
+        .nth(3)
+        .map(|v| v.parse().unwrap())
+        .unwrap_or(24);
     let mut s = Session::open_care(Path::new(&rom), Path::new(&base), false).unwrap();
     let care = s.care_at();
     let day = (care / 86_400.0).floor() * 86_400.0;

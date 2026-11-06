@@ -65,15 +65,96 @@ mod tests {
         assert_eq!(ASSET_ROOT, "asset/v7/Android");
 
         let expect = [
-            (0xD780_5452_8833_EB90, "en", 57, "2019-05-13", "fairy", "Fairy", "fw_tg18_en_v057_2019-05-13_fairy", "Fairy (EN v057)"),
-            (0x8313_24F3_B2FA_6768, "en", 58, "2019-05-13", "magic", "Magic", "fw_tg18_en_v058_2019-05-13_magic", "Magic (EN v058)"),
-            (0xA38D_22B6_76C5_3108, "en", 63, "2020-02-13", "wondergarden", "Wonder Garden", "fw_tg18_en_v063_2020-02-13_wondergarden", "Wonder Garden (EN v063)"),
-            (0x7056_A91C_C05E_227F, "jp", 30, "2018-10-19", "fairy", "Fairy", "fw_tg18_jp_v030_2018-10-19_fairy", "Fairy (JP v030)"),
-            (0x4089_9249_C2E4_6D53, "jp", 31, "2018-10-19", "magic", "Magic", "fw_tg18_jp_v031_2018-10-19_magic", "Magic (JP v031)"),
-            (0xEA18_7BF0_CBFA_04F3, "jp", 47, "2019-05-28", "fantasy", "Fantasy", "fw_tg18_jp_v047_2019-05-28_fantasy", "Fantasy (JP v047)"),
-            (0xA6FF_6D03_28E7_0278, "jp", 55, "2019-03-10", "pastel", "Pastel", "fw_tg18_jp_v055_2019-03-10_pastel", "Pastel (JP v055)"),
-            (0x3A68_A53E_2DB1_64B2, "jp", 56, "2019-04-24", "sanrio", "Sanrio", "fw_tg18_jp_v056_2019-04-24_sanrio", "Sanrio (JP v056)"),
-            (0x28AD_63C3_4FA9_E369, "jp", 62, "2019-09-12", "sweets", "Sweets", "fw_tg18_jp_v062_2019-09-12_sweets", "Sweets (JP v062)"),
+            (
+                0xD780_5452_8833_EB90,
+                "en",
+                57,
+                "2019-05-13",
+                "fairy",
+                "Fairy",
+                "fw_tg18_en_v057_2019-05-13_fairy",
+                "Fairy (EN v057)",
+            ),
+            (
+                0x8313_24F3_B2FA_6768,
+                "en",
+                58,
+                "2019-05-13",
+                "magic",
+                "Magic",
+                "fw_tg18_en_v058_2019-05-13_magic",
+                "Magic (EN v058)",
+            ),
+            (
+                0xA38D_22B6_76C5_3108,
+                "en",
+                63,
+                "2020-02-13",
+                "wondergarden",
+                "Wonder Garden",
+                "fw_tg18_en_v063_2020-02-13_wondergarden",
+                "Wonder Garden (EN v063)",
+            ),
+            (
+                0x7056_A91C_C05E_227F,
+                "jp",
+                30,
+                "2018-10-19",
+                "fairy",
+                "Fairy",
+                "fw_tg18_jp_v030_2018-10-19_fairy",
+                "Fairy (JP v030)",
+            ),
+            (
+                0x4089_9249_C2E4_6D53,
+                "jp",
+                31,
+                "2018-10-19",
+                "magic",
+                "Magic",
+                "fw_tg18_jp_v031_2018-10-19_magic",
+                "Magic (JP v031)",
+            ),
+            (
+                0xEA18_7BF0_CBFA_04F3,
+                "jp",
+                47,
+                "2019-05-28",
+                "fantasy",
+                "Fantasy",
+                "fw_tg18_jp_v047_2019-05-28_fantasy",
+                "Fantasy (JP v047)",
+            ),
+            (
+                0xA6FF_6D03_28E7_0278,
+                "jp",
+                55,
+                "2019-03-10",
+                "pastel",
+                "Pastel",
+                "fw_tg18_jp_v055_2019-03-10_pastel",
+                "Pastel (JP v055)",
+            ),
+            (
+                0x3A68_A53E_2DB1_64B2,
+                "jp",
+                56,
+                "2019-04-24",
+                "sanrio",
+                "Sanrio",
+                "fw_tg18_jp_v056_2019-04-24_sanrio",
+                "Sanrio (JP v056)",
+            ),
+            (
+                0x28AD_63C3_4FA9_E369,
+                "jp",
+                62,
+                "2019-09-12",
+                "sweets",
+                "Sweets",
+                "fw_tg18_jp_v062_2019-09-12_sweets",
+                "Sweets (JP v062)",
+            ),
         ];
         assert_eq!(tg18::roms::KNOWN.len(), 9);
         for (i, row) in expect.iter().enumerate() {
@@ -86,22 +167,35 @@ mod tests {
             assert_eq!(k.name, row.5);
             assert_eq!(k.stem(), row.6);
             assert_eq!(k.display_name(), row.7);
-            assert_eq!(tg18::roms::identify_hash(row.0).map(|r| r.stem()).as_deref(), Some(row.6));
+            assert_eq!(
+                tg18::roms::identify_hash(row.0)
+                    .map(|r| r.stem())
+                    .as_deref(),
+                Some(row.6)
+            );
         }
     }
 
     #[test]
     fn license_stays_mit_and_no_rom_is_shipped() {
         let repo = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
-        let lic = std::fs::read_to_string(repo.join("third_party/nijiiro-egg/LICENSE")).expect("LICENSE");
+        let lic =
+            std::fs::read_to_string(repo.join("third_party/nijiiro-egg/LICENSE")).expect("LICENSE");
         assert!(lic.contains("MIT License"));
         assert!(lic.contains("Copyright (c) 2026 oreo-fox"));
         let mut shipped = Vec::new();
         fn walk(dir: &std::path::Path, shipped: &mut Vec<std::path::PathBuf>) {
-            let Ok(rd) = std::fs::read_dir(dir) else { return };
+            let Ok(rd) = std::fs::read_dir(dir) else {
+                return;
+            };
             for ent in rd.flatten() {
                 let name = ent.file_name().to_string_lossy().to_string();
-                if name == "target" || name == ".git" || name == ".opencode" || name == "out" || name == "node_modules" {
+                if name == "target"
+                    || name == ".git"
+                    || name == ".opencode"
+                    || name == "out"
+                    || name == "node_modules"
+                {
                     continue;
                 }
                 let path = ent.path();
@@ -116,6 +210,9 @@ mod tests {
             }
         }
         walk(&repo, &mut shipped);
-        assert!(shipped.is_empty(), "firmware or saves must not be committed: {shipped:?}");
+        assert!(
+            shipped.is_empty(),
+            "firmware or saves must not be committed: {shipped:?}"
+        );
     }
 }

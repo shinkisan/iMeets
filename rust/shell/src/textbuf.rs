@@ -292,31 +292,44 @@ fn kana(code: u16) -> Option<&'static str> {
 
 fn scan_at(sram: &[u8], start: usize) -> Option<String> {
     let hi = 0xE000.min(sram.len());
-    if start + 4 > hi { return None; }
+    if start + 4 > hi {
+        return None;
+    }
     let mut j = start;
     let mut codes = 0usize;
     while j + 2 <= hi {
         let w = u16::from_le_bytes([sram[j], sram[j + 1]]);
         // The Sweets renderer also accepts mapped extended-Latin pages.
         // Unknown non-kana pages remain terminators instead of being guessed.
-        if w == 0x0400 || w <= 0x00ff || ((w >> 8) != 4 && kana(w).is_none()) { break; }
+        if w == 0x0400 || w <= 0x00ff || ((w >> 8) != 4 && kana(w).is_none()) {
+            break;
+        }
         codes += 1;
         j += 2;
     }
-    if codes < 2 || j + 2 > hi { return None; }
+    if codes < 2 || j + 2 > hi {
+        return None;
+    }
     let term = u16::from_le_bytes([sram[j], sram[j + 1]]);
-    if term != 0x0400 && term > 0x00ff { return None; }
+    if term != 0x0400 && term > 0x00ff {
+        return None;
+    }
     let mut out = String::new();
     let mut known = 0usize;
     for i in 0..codes {
         let at = start + i * 2;
         let w = u16::from_le_bytes([sram[at], sram[at + 1]]);
         match kana(w) {
-            Some(ch) => { out.push_str(ch); known += 1; }
+            Some(ch) => {
+                out.push_str(ch);
+                known += 1;
+            }
             None => out.push('□'),
         }
     }
-    if known == 0 { return None; }
+    if known == 0 {
+        return None;
+    }
     Some(out.trim_matches('□').trim().to_string())
 }
 
@@ -352,7 +365,9 @@ mod tests {
     #[test]
     fn decodes_known_buffers() {
         let mut sram = vec![0u8; 0x10000];
-        let codes = [0x0419u16, 0x040B, 0x0403, 0x0401, 0x0401, 0x0401, 0x0401, 0x0401];
+        let codes = [
+            0x0419u16, 0x040B, 0x0403, 0x0401, 0x0401, 0x0401, 0x0401, 0x0401,
+        ];
         for (i, c) in codes.iter().enumerate() {
             let at = 0xD701 + i * 2;
             sram[at..at + 2].copy_from_slice(&c.to_le_bytes());

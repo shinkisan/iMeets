@@ -20,14 +20,24 @@ fn main() {
         let wa = u32::from_le_bytes(sa[i..i + 4].try_into().unwrap());
         let wb = u32::from_le_bytes(sb[i..i + 4].try_into().unwrap());
         if wa == 0 && wb == 300 {
-            println!("u32 300 at {:05X}: A={:02X?} B={:02X?}", i, &sa[i..i + 8], &sb[i..i + 8]);
+            println!(
+                "u32 300 at {:05X}: A={:02X?} B={:02X?}",
+                i,
+                &sa[i..i + 8],
+                &sb[i..i + 8]
+            );
         }
     }
     for i in 0..sa.len().saturating_sub(2) {
         let ha = u16::from_le_bytes(sa[i..i + 2].try_into().unwrap());
         let hb = u16::from_le_bytes(sb[i..i + 2].try_into().unwrap());
         if ha == 0 && hb == 300 {
-            println!("u16 300 at {:05X}: A={:02X?} B={:02X?}", i, &sa[i..i + 8], &sb[i..i + 8]);
+            println!(
+                "u16 300 at {:05X}: A={:02X?} B={:02X?}",
+                i,
+                &sa[i..i + 8],
+                &sb[i..i + 8]
+            );
         }
     }
     // Print the first differing runs.

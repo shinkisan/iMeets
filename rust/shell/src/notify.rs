@@ -50,9 +50,18 @@ pub fn on_call(
     let (not_before_ms, last_ms) = if collapsed {
         (not_before_ms, last_ms)
     } else {
-        (now_ms.saturating_add(COLLAPSE_MS).max(not_before_ms), now_ms)
+        (
+            now_ms.saturating_add(COLLAPSE_MS).max(not_before_ms),
+            now_ms,
+        )
     };
-    CallDecision { detected: true, banner, channel, not_before_ms, last_ms }
+    CallDecision {
+        detected: true,
+        banner,
+        channel,
+        not_before_ms,
+        last_ms,
+    }
 }
 
 pub struct AlarmFire {
@@ -65,7 +74,10 @@ pub struct AlarmFire {
 pub fn on_alarm(event_ms: i64, now_ms: i64, visible: bool, missed_gap: bool) -> AlarmFire {
     let not_before_ms = event_ms.saturating_add(COLLAPSE_MS).max(now_ms);
     let post = !missed_gap && !visible && event_ms > 0 && now_ms >= event_ms;
-    AlarmFire { post, not_before_ms }
+    AlarmFire {
+        post,
+        not_before_ms,
+    }
 }
 
 pub fn missed_while_stopped(event_ms: i64, now_ms: i64) -> bool {
@@ -95,11 +107,25 @@ mod tests {
         assert!(front.detected);
         assert!(!front.banner);
 
-        let again = on_call(true, false, false, 50_000, shown.last_ms, shown.not_before_ms);
+        let again = on_call(
+            true,
+            false,
+            false,
+            50_000,
+            shown.last_ms,
+            shown.not_before_ms,
+        );
         assert!(again.detected);
         assert!(!again.banner);
 
-        let later = on_call(true, false, false, shown.not_before_ms, shown.last_ms, shown.not_before_ms);
+        let later = on_call(
+            true,
+            false,
+            false,
+            shown.not_before_ms,
+            shown.last_ms,
+            shown.not_before_ms,
+        );
         assert!(later.banner);
 
         let due = on_alarm(5_000, 5_000, false, false);

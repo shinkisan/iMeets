@@ -24,7 +24,11 @@ impl Lang {
     }
 
     pub fn from_ffi(n: i32) -> Lang {
-        if n == 1 { Lang::En } else { Lang::Zh }
+        if n == 1 {
+            Lang::En
+        } else {
+            Lang::Zh
+        }
     }
 }
 
@@ -441,15 +445,30 @@ mod tests {
         assert_eq!(text(Lang::Zh, "call_title"), "拓麻歌子在叫你");
         assert_eq!(text(Lang::En, "sanrio_first"), "Switch to Sanrio first");
         assert_eq!(text(Lang::En, "balance_range"), "balance must be 0–99999");
-        assert_eq!(text(Lang::En, "ble_waiting"), "等待 WebMeets 连接 · TMGC_meets");
+        assert_eq!(
+            text(Lang::En, "ble_waiting"),
+            "等待 WebMeets 连接 · TMGC_meets"
+        );
         assert!(text(Lang::En, "notes_body").contains("not yet adult"));
         assert!(text(Lang::En, "notes_body").contains("age-up done, evolution not finished"));
         assert_eq!(text(Lang::En, "missing"), "");
         assert_eq!(text(Lang::Zh, "version"), "版本");
         assert_eq!(text(Lang::Zh, "ok"), "好");
-        assert_eq!(localize(Lang::Zh, "enhanced mode restored; if you had paused, pause stays"), "增强模式已恢复；如果你暂停过，暂停仍然有效");
-        assert_eq!(localize(Lang::Zh, "save failed: disk full"), "保存失败：disk full");
+        assert_eq!(
+            localize(
+                Lang::Zh,
+                "enhanced mode restored; if you had paused, pause stays"
+            ),
+            "增强模式已恢复；如果你暂停过，暂停仍然有效"
+        );
+        assert_eq!(
+            localize(Lang::Zh, "save failed: disk full"),
+            "保存失败：disk full"
+        );
         assert_eq!(localize(Lang::En, "anything"), "anything");
-        assert_eq!(localize(Lang::Zh, "no matching sentence"), "no matching sentence");
+        assert_eq!(
+            localize(Lang::Zh, "no matching sentence"),
+            "no matching sentence"
+        );
     }
 }

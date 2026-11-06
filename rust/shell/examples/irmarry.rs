@@ -63,11 +63,26 @@ fn main() {
     let rom = std::env::var("POCKET_MEETS_ROM").expect("POCKET_MEETS_ROM");
     let a_dir = std::env::args().nth(1).expect("a");
     let b_dir = std::env::args().nth(2).expect("b");
-    let secs: f64 = std::env::args().nth(3).map(|v| v.parse().unwrap()).unwrap_or(40.0);
-    let hour: f64 = std::env::args().nth(4).map(|v| v.parse().unwrap()).unwrap_or(10.0);
-    let a_opt: usize = std::env::args().nth(5).map(|v| v.parse().unwrap()).unwrap_or(2);
-    let b_opt: usize = std::env::args().nth(6).map(|v| v.parse().unwrap()).unwrap_or(0);
-    let lead: f64 = std::env::args().nth(7).map(|v| v.parse().unwrap()).unwrap_or(0.5);
+    let secs: f64 = std::env::args()
+        .nth(3)
+        .map(|v| v.parse().unwrap())
+        .unwrap_or(40.0);
+    let hour: f64 = std::env::args()
+        .nth(4)
+        .map(|v| v.parse().unwrap())
+        .unwrap_or(10.0);
+    let a_opt: usize = std::env::args()
+        .nth(5)
+        .map(|v| v.parse().unwrap())
+        .unwrap_or(2);
+    let b_opt: usize = std::env::args()
+        .nth(6)
+        .map(|v| v.parse().unwrap())
+        .unwrap_or(0);
+    let lead: f64 = std::env::args()
+        .nth(7)
+        .map(|v| v.parse().unwrap())
+        .unwrap_or(0.5);
     let decline: bool = std::env::args().nth(8).as_deref() == Some("decline");
     let mut a = Session::open_care(Path::new(&rom), Path::new(&a_dir), false).unwrap();
     let mut b = Session::open_care(Path::new(&rom), Path::new(&b_dir), false).unwrap();
@@ -134,7 +149,11 @@ fn main() {
         .map(|i| {
             let mut c = i as u16;
             for _ in 0..8 {
-                c = if c & 1 != 0 { (c >> 1) ^ 0x8408 } else { c >> 1 };
+                c = if c & 1 != 0 {
+                    (c >> 1) ^ 0x8408
+                } else {
+                    c >> 1
+                };
             }
             c
         })
@@ -157,8 +176,12 @@ fn main() {
     }
 
     let cap = std::env::var("IRCAP_DIR").ok();
-    let cancel_at: Option<usize> = std::env::var("IRCANCEL_AT").ok().and_then(|v| v.parse().ok());
-    let drop_every: Option<usize> = std::env::var("IRDROP_EVERY").ok().and_then(|v| v.parse().ok());
+    let cancel_at: Option<usize> = std::env::var("IRCANCEL_AT")
+        .ok()
+        .and_then(|v| v.parse().ok());
+    let drop_every: Option<usize> = std::env::var("IRDROP_EVERY")
+        .ok()
+        .and_then(|v| v.parse().ok());
     let drop_at: Option<usize> = std::env::var("IRDROP_AT").ok().and_then(|v| v.parse().ok());
     let mut sent_all = 0usize;
     let mut cap_ab: Vec<u8> = Vec::new();
@@ -174,7 +197,15 @@ fn main() {
         let fa = a.machine.sys.uart_take();
         let fb = b.machine.sys.uart_take();
         if i < 5 {
-            eprintln!("i={i} nowA={:.2} nowB={:.2} fa={} fb={} firstA={:02X?} firstB={:02X?}", a.machine.now(), b.machine.now(), fa.len(), fb.len(), &fa[..fa.len().min(12)], &fb[..fb.len().min(12)]);
+            eprintln!(
+                "i={i} nowA={:.2} nowB={:.2} fa={} fb={} firstA={:02X?} firstB={:02X?}",
+                a.machine.now(),
+                b.machine.now(),
+                fa.len(),
+                fb.len(),
+                &fa[..fa.len().min(12)],
+                &fb[..fb.len().min(12)]
+            );
         }
         for x in &fa {
             sent_all += 1;
@@ -209,7 +240,12 @@ fn main() {
         if !fa.is_empty() || !fb.is_empty() {
             frames += fa.len() + fb.len();
             if frames < 400 || i % 100 == 0 {
-                eprintln!("t={:5.2} A->B {:02X?} B->A {:02X?}", i as f64 * 0.02, fa, fb);
+                eprintln!(
+                    "t={:5.2} A->B {:02X?} B->A {:02X?}",
+                    i as f64 * 0.02,
+                    fa,
+                    fb
+                );
             }
         }
         if let Some(c) = cancel_at {
@@ -246,12 +282,20 @@ fn main() {
             a.frame(&mut px);
             let ta = pocket_meets::menu_text::read(&px);
             let mut rgb = Vec::with_capacity(16_384 * 3);
-            for p in &px { rgb.push(((p >> 16) & 0xff) as u8); rgb.push(((p >> 8) & 0xff) as u8); rgb.push((p & 0xff) as u8); }
+            for p in &px {
+                rgb.push(((p >> 16) & 0xff) as u8);
+                rgb.push(((p >> 8) & 0xff) as u8);
+                rgb.push((p & 0xff) as u8);
+            }
             let _ = std::fs::write(format!("/tmp/mar-a-{i}.rgb"), &rgb);
             b.frame(&mut px);
             let tb = pocket_meets::menu_text::read(&px);
             let mut rgb = Vec::with_capacity(16_384 * 3);
-            for p in &px { rgb.push(((p >> 16) & 0xff) as u8); rgb.push(((p >> 8) & 0xff) as u8); rgb.push((p & 0xff) as u8); }
+            for p in &px {
+                rgb.push(((p >> 16) & 0xff) as u8);
+                rgb.push(((p >> 8) & 0xff) as u8);
+                rgb.push((p & 0xff) as u8);
+            }
             let _ = std::fs::write(format!("/tmp/mar-b-{i}.rgb"), &rgb);
             eprintln!("i={i:4} A[{ta}] B[{tb}]");
         }

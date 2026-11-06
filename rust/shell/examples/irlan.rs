@@ -89,10 +89,22 @@ fn main() {
     let rom = std::env::var("POCKET_MEETS_ROM").expect("POCKET_MEETS_ROM");
     let role = std::env::args().nth(1).expect("host|join");
     let base = std::env::args().nth(2).expect("save");
-    let port: u16 = std::env::args().nth(3).and_then(|v| v.parse().ok()).unwrap_or(47000);
-    let secs: f64 = std::env::args().nth(4).and_then(|v| v.parse().ok()).unwrap_or(40.0);
-    let hour: f64 = std::env::args().nth(5).and_then(|v| v.parse().ok()).unwrap_or(10.0);
-    let option: usize = std::env::args().nth(6).and_then(|v| v.parse().ok()).unwrap_or(0);
+    let port: u16 = std::env::args()
+        .nth(3)
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(47000);
+    let secs: f64 = std::env::args()
+        .nth(4)
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(40.0);
+    let hour: f64 = std::env::args()
+        .nth(5)
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(10.0);
+    let option: usize = std::env::args()
+        .nth(6)
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(0);
     let answer_decline = std::env::var("IRLAN_ANSWER").as_deref() == Ok("decline");
 
     let mut s = Session::open_care(Path::new(&rom), Path::new(&base), false).unwrap();
@@ -123,7 +135,9 @@ fn main() {
         }
     };
     stream.set_nodelay(true).unwrap();
-    stream.set_read_timeout(Some(Duration::from_secs(20))).unwrap();
+    stream
+        .set_read_timeout(Some(Duration::from_secs(20)))
+        .unwrap();
 
     send_line(&mut stream, "TAMA-LAN 1");
     let hello = read_line(&mut stream).unwrap_or_default();
@@ -132,7 +146,13 @@ fn main() {
     let sub = open_submenu(&mut s);
     eprintln!("submenu: {sub:?}");
     // Host proposes when option is 2; the joining side always waits in あそぶ.
-    let pick = if option == 2 && role == "host" { 2 } else if option == 2 { 0 } else { option };
+    let pick = if option == 2 && role == "host" {
+        2
+    } else if option == 2 {
+        0
+    } else {
+        option
+    };
     for _ in 0..pick {
         tap(&mut s, 0);
     }
@@ -167,7 +187,11 @@ fn main() {
         .map(|i| {
             let mut c = i as u16;
             for _ in 0..8 {
-                c = if c & 1 != 0 { (c >> 1) ^ 0x8408 } else { c >> 1 };
+                c = if c & 1 != 0 {
+                    (c >> 1) ^ 0x8408
+                } else {
+                    c >> 1
+                };
             }
             c
         })
@@ -189,9 +213,15 @@ fn main() {
             s.machine.sys.uart_receive(*byte);
         }
     }
-    stream.set_read_timeout(Some(Duration::from_secs(5))).unwrap();
+    stream
+        .set_read_timeout(Some(Duration::from_secs(5)))
+        .unwrap();
     fn send_frame(stream: &mut TcpStream, typ: u8, data: &[u8]) {
-        let mut h = [typ, (data.len() & 0xFF) as u8, ((data.len() >> 8) & 0xFF) as u8];
+        let mut h = [
+            typ,
+            (data.len() & 0xFF) as u8,
+            ((data.len() >> 8) & 0xFF) as u8,
+        ];
         let _ = stream.write_all(&mut h);
         if !data.is_empty() {
             let _ = stream.write_all(data);
@@ -221,7 +251,12 @@ fn main() {
         let out = s.machine.sys.uart_take();
         if !out.is_empty() {
             if i < 3 {
-                eprintln!("i={i} now={:.2} out={} first={:02X?}", s.machine.now(), out.len(), &out[..out.len().min(24)]);
+                eprintln!(
+                    "i={i} now={:.2} out={} first={:02X?}",
+                    s.machine.now(),
+                    out.len(),
+                    &out[..out.len().min(24)]
+                );
             }
             send_frame(&mut stream, 0, &out);
             sent += out.len();
@@ -235,7 +270,12 @@ fn main() {
             match recv_frame(&mut stream) {
                 Some((0, data)) => {
                     if i < 3 {
-                        eprintln!("i={i} now={:.2} in={} first={:02X?}", s.machine.now(), data.len(), &data[..data.len().min(24)]);
+                        eprintln!(
+                            "i={i} now={:.2} in={} first={:02X?}",
+                            s.machine.now(),
+                            data.len(),
+                            &data[..data.len().min(24)]
+                        );
                     }
                     for b in data {
                         s.machine.sys.uart_receive(b);

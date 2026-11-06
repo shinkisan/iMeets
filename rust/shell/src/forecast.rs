@@ -22,13 +22,23 @@ pub struct Decision {
 
 impl Decision {
     fn empty() -> Self {
-        Self { event_ms: None, retry_in_ms: None, again_in_ms: None, clear_retry: false, error: None }
+        Self {
+            event_ms: None,
+            retry_in_ms: None,
+            again_in_ms: None,
+            clear_retry: false,
+            error: None,
+        }
     }
 }
 
 pub fn seed_not_before(now_unix: f64, last_call_ms: i64) -> f64 {
     let floor = last_call_ms as f64 / 1000.0 + 300.0;
-    if now_unix > floor { now_unix } else { floor }
+    if now_unix > floor {
+        now_unix
+    } else {
+        floor
+    }
 }
 
 pub fn reached_horizon(forecast_at: f64, now_unix: f64) -> bool {
@@ -47,14 +57,27 @@ pub fn decide(code: i32, event_unix: f64, visible_or_resident: bool) -> Decision
             clear_retry: true,
             error: None,
         },
-        2 => Decision { retry_in_ms: Some(RETRY_HORIZON_MS), ..Decision::empty() },
-        0 => Decision {
-            retry_in_ms: Some(RETRY_NONE_MS),
-            again_in_ms: if visible_or_resident { Some(AGAIN_MS) } else { None },
+        2 => Decision {
+            retry_in_ms: Some(RETRY_HORIZON_MS),
             ..Decision::empty()
         },
-        n if n < 0 => Decision { error: Some(stopped), ..Decision::empty() },
-        _ => Decision { retry_in_ms: Some(RETRY_NONE_MS), ..Decision::empty() },
+        0 => Decision {
+            retry_in_ms: Some(RETRY_NONE_MS),
+            again_in_ms: if visible_or_resident {
+                Some(AGAIN_MS)
+            } else {
+                None
+            },
+            ..Decision::empty()
+        },
+        n if n < 0 => Decision {
+            error: Some(stopped),
+            ..Decision::empty()
+        },
+        _ => Decision {
+            retry_in_ms: Some(RETRY_NONE_MS),
+            ..Decision::empty()
+        },
     }
 }
 
@@ -158,7 +181,10 @@ mod tests {
         assert!(decide(0, 0.0, false).again_in_ms.is_none());
 
         let bad = decide(-1, 0.0, false);
-        assert_eq!(bad.error, Some("Firmware forecast stopped before its next call."));
+        assert_eq!(
+            bad.error,
+            Some("Firmware forecast stopped before its next call.")
+        );
         assert_eq!(thrown_retry_ms(), 60_000);
         assert!(reached_horizon(100.0 + 86_400.0, 100.0));
         assert!(!reached_horizon(100.0 + 86_399.0, 100.0));

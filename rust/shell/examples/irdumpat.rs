@@ -9,12 +9,18 @@ fn main() {
     let rom = std::env::var("POCKET_MEETS_ROM").expect("POCKET_MEETS_ROM");
     let base = std::env::args().nth(1).expect("save");
     let off = usize::from_str_radix(
-        std::env::args().nth(2).expect("offset").trim_start_matches("0x"),
+        std::env::args()
+            .nth(2)
+            .expect("offset")
+            .trim_start_matches("0x"),
         16,
     )
     .unwrap();
     let len = usize::from_str_radix(
-        std::env::args().nth(3).unwrap_or_else(|| "64".into()).trim_start_matches("0x"),
+        std::env::args()
+            .nth(3)
+            .unwrap_or_else(|| "64".into())
+            .trim_start_matches("0x"),
         16,
     )
     .unwrap();

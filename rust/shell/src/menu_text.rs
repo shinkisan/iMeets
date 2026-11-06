@@ -308,7 +308,9 @@ fn ink_windows(ink: &[[bool; WIDTH]; WIDTH], width: usize) -> [[u16; WIDTH]; WID
     for y in 0..WIDTH {
         let mut bits = 0u16;
         for x in 0..width {
-            if ink[y][x] { bits |= 1 << x; }
+            if ink[y][x] {
+                bits |= 1 << x;
+            }
         }
         for x in 0..=WIDTH - width {
             windows[y][x] = bits;
@@ -321,8 +323,23 @@ fn ink_windows(ink: &[[bool; WIDTH]; WIDTH], width: usize) -> [[u16; WIDTH]; WID
 }
 
 fn is_pictogram(c: char) -> bool {
-    matches!(c, '😀' | '😣' | '😖' | '😑' | '😵' | '😢' | '🐰' | '🎮' | '🎂' |
-        '🎁' | '📱' | '🏠' | '👜' | '🍙' | '🍰')
+    matches!(
+        c,
+        '😀' | '😣'
+            | '😖'
+            | '😑'
+            | '😵'
+            | '😢'
+            | '🐰'
+            | '🎮'
+            | '🎂'
+            | '🎁'
+            | '📱'
+            | '🏠'
+            | '👜'
+            | '🍙'
+            | '🍰'
+    )
 }
 
 fn scaled_lines(ink: &[[bool; WIDTH]; WIDTH]) -> Vec<(usize, usize, usize, String)> {
@@ -368,13 +385,18 @@ fn scaled_lines(ink: &[[bool; WIDTH]; WIDTH]) -> Vec<(usize, usize, usize, Strin
             {
                 break;
             }
-            if gap > 0 { text.push(' '); }
+            if gap > 0 {
+                text.push(' ');
+            }
             text.push_str(&segments[index].3);
             end = segments[index].2;
             index += 1;
         }
         let adjacent_ink = |start: usize, stop: usize| {
-            (y..y + H).map(|yy| (start..stop).filter(|xx| ink[yy][*xx]).count()).sum::<usize>() > 4
+            (y..y + H)
+                .map(|yy| (start..stop).filter(|xx| ink[yy][*xx]).count())
+                .sum::<usize>()
+                > 4
         };
         if text.chars().filter(|c| *c != ' ').count() >= 2
             && text.chars().any(char::is_alphanumeric)
@@ -425,7 +447,9 @@ pub fn read(pixels: &[u32]) -> String {
     while i < columns.len() {
         let top = columns[i].0;
         let mut end = i + 1;
-        while end < columns.len() && columns[end].0 - top <= 3 { end += 1; }
+        while end < columns.len() && columns[end].0 - top <= 3 {
+            end += 1;
+        }
         let mut band = columns[i..end].to_vec();
         band.sort_by_key(|(_, x, _)| std::cmp::Reverse(*x));
         let mut j = 0;
@@ -498,11 +522,14 @@ pub fn read(pixels: &[u32]) -> String {
             // Name-entry characters occupy adjacent green boxes separated by
             // a thin white rule. That rule is not a space in the name.
             let green_box = |at: usize| {
-                (y..y + CELL_H).flat_map(|yy| (at..at + CELL_W).map(move |cx| pixels[yy * WIDTH + cx]))
+                (y..y + CELL_H)
+                    .flat_map(|yy| (at..at + CELL_W).map(move |cx| pixels[yy * WIDTH + cx]))
                     .filter(|p| {
                         let (r, g, b) = ((p >> 16) & 255, (p >> 8) & 255, p & 255);
                         (170..=210).contains(&r) && g >= 225 && (160..=210).contains(&b)
-                    }).count() >= 24
+                    })
+                    .count()
+                    >= 24
             };
             let clean_gap = (y..y + CELL_H).all(|yy| {
                 (end..segments[i].1).all(|cx| {
@@ -519,8 +546,7 @@ pub fn read(pixels: &[u32]) -> String {
                 let empty_name_box = gap <= 14
                     && end + CELL_W <= WIDTH
                     && green_box(end)
-                    && (y..y + CELL_H)
-                        .all(|yy| (end..segments[i].1).all(|cx| !ink[yy][cx]));
+                    && (y..y + CELL_H).all(|yy| (end..segments[i].1).all(|cx| !ink[yy][cx]));
                 if empty_name_box {
                     word.push(' ');
                     word.push_str(&segments[i].3);
@@ -551,26 +577,38 @@ pub fn read(pixels: &[u32]) -> String {
         }
         let count = word.chars().filter(|c| *c != ' ').count();
         let pictograms = word.chars().filter(|c| is_pictogram(*c)).count();
-        let isolated_pictogram = count == 1 && pictograms == 1
+        let isolated_pictogram = count == 1
+            && pictograms == 1
             && segments.iter().any(|(sy, sx, se, other)| {
-                *sy == y && (x.abs_diff(*se) <= 32 || end.abs_diff(*sx) <= 32)
+                *sy == y
+                    && (x.abs_diff(*se) <= 32 || end.abs_diff(*sx) <= 32)
                     && other.chars().filter(|c| is_pictogram(*c)).count() >= 2
             });
         // The name keyboard also has a page with just the return symbol.
         // Its pink option cell and green name boxes provide context for this
         // otherwise easily confused single glyph.
-        let keyboard_return = count == 1 && word == "↵"
-            && (y..y + CELL_H).flat_map(|yy| (x..end).map(move |cx| pixels[yy * WIDTH + cx]))
+        let keyboard_return = count == 1
+            && word == "↵"
+            && (y..y + CELL_H)
+                .flat_map(|yy| (x..end).map(move |cx| pixels[yy * WIDTH + cx]))
                 .filter(|p| {
                     let (r, g, b) = ((p >> 16) & 255, (p >> 8) & 255, p & 255);
                     r >= 245 && (180..=215).contains(&g) && b >= 210
-                }).count() >= 24
-            && (0..y).flat_map(|yy| (0..WIDTH).map(move |cx| pixels[yy * WIDTH + cx]))
+                })
+                .count()
+                >= 24
+            && (0..y)
+                .flat_map(|yy| (0..WIDTH).map(move |cx| pixels[yy * WIDTH + cx]))
                 .filter(|p| {
                     let (r, g, b) = ((p >> 16) & 255, (p >> 8) & 255, p & 255);
                     (170..=210).contains(&r) && g >= 225 && (160..=210).contains(&b)
-                }).count() >= 100;
-        if (!word.chars().any(char::is_alphanumeric) && pictograms < 2 && !isolated_pictogram && !keyboard_return)
+                })
+                .count()
+                >= 100;
+        if (!word.chars().any(char::is_alphanumeric)
+            && pictograms < 2
+            && !isolated_pictogram
+            && !keyboard_return)
             || (count < 2 && !isolated_pictogram && !keyboard_return)
         {
             continue;
@@ -731,9 +769,8 @@ mod tests {
             let windows = ink_windows(&ink, width);
             for y in 0..WIDTH {
                 for x in 0..=WIDTH - width {
-                    let expected = (0..width).fold(0u16, |bits, dx| {
-                        bits | (u16::from(ink[y][x + dx]) << dx)
-                    });
+                    let expected =
+                        (0..width).fold(0u16, |bits, dx| bits | (u16::from(ink[y][x + dx]) << dx));
                     assert_eq!(windows[y][x], expected, "{width} at {x},{y}");
                 }
             }
@@ -795,15 +832,23 @@ mod tests {
             for y in 0..=WIDTH - 19 {
                 for x in 0..=WIDTH - 16 {
                     let mut rows = [0u16; 19];
-                    for dy in 0..19 { rows[dy] = windows[y + dy][x]; }
-                    if font.contains_key(&rows) { cells += 1; }
+                    for dy in 0..19 {
+                        rows[dy] = windows[y + dy][x];
+                    }
+                    if font.contains_key(&rows) {
+                        cells += 1;
+                    }
                 }
             }
             // A single wide glyph (for example ー) can accidentally fit a
             // scaled cell; a 16px line still requires at least two cells and
             // is rejected by scaled_lines above. More than one stray cell in
             // a frame would be a new false-positive case to investigate.
-            assert!(cells <= 1, "screen {index} ({:?}) has {cells} 16px glyph cells", screen["label"]);
+            assert!(
+                cells <= 1,
+                "screen {index} ({:?}) has {cells} 16px glyph cells",
+                screen["label"]
+            );
         }
     }
 
@@ -905,7 +950,11 @@ mod tests {
     fn reads_16px_nearest_neighbour_scaled_text() {
         let mut pixels = [0xffffffff; WIDTH * WIDTH];
         for (index, ch) in ['か', 'た', 'な'].iter().enumerate() {
-            let rows = scaled_glyphs().iter().find(|(_, value)| *value == ch).unwrap().0;
+            let rows = scaled_glyphs()
+                .iter()
+                .find(|(_, value)| *value == ch)
+                .unwrap()
+                .0;
             for y in 0..19 {
                 for x in 0..16 {
                     if rows[y] & (1 << x) != 0 {
@@ -926,7 +975,11 @@ mod tests {
     fn joins_scaled_text_across_small_spacing() {
         let mut pixels = [0xffffffff; WIDTH * WIDTH];
         for (ch, left) in [('か', 9), ('た', 25), ('な', 43), ('に', 59)] {
-            let rows = scaled_glyphs().iter().find(|(_, value)| **value == ch).unwrap().0;
+            let rows = scaled_glyphs()
+                .iter()
+                .find(|(_, value)| **value == ch)
+                .unwrap()
+                .0;
             for y in 0..19 {
                 for x in 0..16 {
                     if rows[y] & (1 << x) != 0 {
@@ -941,8 +994,12 @@ mod tests {
     fn reads_another_single_character_status_name() {
         let screens: Vec<serde_json::Value> = serde_json::from_str(include_str!(
             "../../../tools/fixtures/sweets-full-screens.json"
-        )).unwrap();
-        let screen = screens.iter().find(|s| s["label"] == "か ふわつのっち").unwrap();
+        ))
+        .unwrap();
+        let screen = screens
+            .iter()
+            .find(|s| s["label"] == "か ふわつのっち")
+            .unwrap();
         let mut pixels = vec![0xff00ff00; WIDTH * WIDTH];
         for (y, row) in screen["rows"].as_array().unwrap().iter().enumerate() {
             for (x, ch) in row.as_str().unwrap().bytes().enumerate() {
@@ -956,15 +1013,13 @@ mod tests {
         }
         let font: Vec<serde_json::Value> = serde_json::from_str(include_str!(
             "../../../tools/fixtures/sweets-small-glyphs.json"
-        )).unwrap();
+        ))
+        .unwrap();
         let glyph = font.iter().find(|g| g["char"] == "き").unwrap();
         for (y, row) in glyph["rows"].as_array().unwrap().iter().enumerate() {
             for (x, ch) in row.as_str().unwrap().bytes().enumerate() {
-                pixels[(78 + y) * WIDTH + 11 + x] = if ch == b'#' {
-                    0xff000080
-                } else {
-                    0xffffffff
-                };
+                pixels[(78 + y) * WIDTH + 11 + x] =
+                    if ch == b'#' { 0xff000080 } else { 0xffffffff };
             }
         }
         assert_eq!(read(&pixels), "き ふわつのっち");
@@ -973,7 +1028,8 @@ mod tests {
     fn reads_small_dialogue_with_a_blank_cell() {
         let screens: Vec<serde_json::Value> = serde_json::from_str(include_str!(
             "../../../tools/fixtures/sweets-full-screens.json"
-        )).unwrap();
+        ))
+        .unwrap();
         let screen = screens.iter().find(|s| s["label"] == "あ").unwrap();
         let mut pixels = vec![0xff00ff00; WIDTH * WIDTH];
         for (y, row) in screen["rows"].as_array().unwrap().iter().enumerate() {
@@ -988,7 +1044,8 @@ mod tests {
         }
         let font: Vec<serde_json::Value> = serde_json::from_str(include_str!(
             "../../../tools/fixtures/sweets-small-glyphs.json"
-        )).unwrap();
+        ))
+        .unwrap();
         let glyph = font.iter().find(|g| g["char"] == "い").unwrap();
         for (y, row) in glyph["rows"].as_array().unwrap().iter().enumerate() {
             for (x, ch) in row.as_str().unwrap().bytes().enumerate() {
@@ -999,11 +1056,15 @@ mod tests {
         }
         assert_eq!(read(&pixels), "あ い");
         for y in 44..53 {
-            for x in 47..57 { pixels[y * WIDTH + x] = 0xffffffff; }
+            for x in 47..57 {
+                pixels[y * WIDTH + x] = 0xffffffff;
+            }
         }
         for (y, row) in glyph["rows"].as_array().unwrap().iter().enumerate() {
             for (x, ch) in row.as_str().unwrap().bytes().enumerate() {
-                if ch == b'#' { pixels[(44 + y) * WIDTH + 56 + x] = 0xff000080; }
+                if ch == b'#' {
+                    pixels[(44 + y) * WIDTH + 56 + x] = 0xff000080;
+                }
             }
         }
         assert_eq!(read(&pixels), "あ  い");
@@ -1012,8 +1073,12 @@ mod tests {
     fn reads_dense_small_glyph_followed_by_left_overhang() {
         let screens: Vec<serde_json::Value> = serde_json::from_str(include_str!(
             "../../../tools/fixtures/sweets-full-screens.json"
-        )).unwrap();
-        let screen = screens.iter().find(|s| s["label"] == "か🎁 ふわつのっち").unwrap();
+        ))
+        .unwrap();
+        let screen = screens
+            .iter()
+            .find(|s| s["label"] == "か🎁 ふわつのっち")
+            .unwrap();
         let mut pixels = vec![0xff00ff00; WIDTH * WIDTH];
         for (y, row) in screen["rows"].as_array().unwrap().iter().enumerate() {
             for (x, ch) in row.as_str().unwrap().bytes().enumerate() {
@@ -1027,7 +1092,8 @@ mod tests {
         }
         let font: Vec<serde_json::Value> = serde_json::from_str(include_str!(
             "../../../tools/fixtures/sweets-small-glyphs.json"
-        )).unwrap();
+        ))
+        .unwrap();
         let glyph = font.iter().find(|g| g["char"] == "ロ").unwrap();
         for (y, row) in glyph["rows"].as_array().unwrap().iter().enumerate() {
             for (x, ch) in row.as_str().unwrap().bytes().enumerate() {
@@ -1044,7 +1110,8 @@ mod tests {
     fn duplicate_extended_codes_do_not_make_small_glyph_ambiguous() {
         let font: Vec<serde_json::Value> = serde_json::from_str(include_str!(
             "../../../tools/fixtures/sweets-small-glyphs.json"
-        )).unwrap();
+        ))
+        .unwrap();
         let mut pixels = [0xffffffff; WIDTH * WIDTH];
         for (index, code) in ["0406", "1001"].iter().enumerate() {
             let glyph = font.iter().find(|g| g["code"] == *code).unwrap();
@@ -1062,8 +1129,12 @@ mod tests {
     fn unknown_name_suffix_is_not_a_complete_single_character_name() {
         let screens: Vec<serde_json::Value> = serde_json::from_str(include_str!(
             "../../../tools/fixtures/sweets-full-screens.json"
-        )).unwrap();
-        let screen = screens.iter().find(|s| s["label"] == "か🎁 ふわつのっち").unwrap();
+        ))
+        .unwrap();
+        let screen = screens
+            .iter()
+            .find(|s| s["label"] == "か🎁 ふわつのっち")
+            .unwrap();
         let mut pixels = vec![0xff00ff00; WIDTH * WIDTH];
         for (y, row) in screen["rows"].as_array().unwrap().iter().enumerate() {
             for (x, ch) in row.as_str().unwrap().bytes().enumerate() {
@@ -1080,7 +1151,10 @@ mod tests {
     }
     #[test]
     fn reads_pictograms_in_a_text_run() {
-        for icon in ['😀', '😣', '😖', '😑', '😵', '😢', '🐰', '🎮', '🎂', '🎁', '📱', '🏠', '👜', '🍙', '🍰'] {
+        for icon in [
+            '😀', '😣', '😖', '😑', '😵', '😢', '🐰', '🎮', '🎂', '🎁', '📱', '🏠', '👜', '🍙',
+            '🍰',
+        ] {
             let mut pixels = [0xffffffff; WIDTH * WIDTH];
             for (i, ch) in ['あ', 'い', icon, 'う', 'え'].iter().enumerate() {
                 let rows = glyphs().iter().find(|(_, value)| *value == ch).unwrap().0;
@@ -1130,9 +1204,16 @@ mod tests {
     fn reads_vertical_columns_from_right_to_left() {
         let screens: Vec<serde_json::Value> = serde_json::from_str(include_str!(
             "../../../tools/fixtures/sweets-full-screens.json"
-        )).unwrap();
-        let source = screens.iter().find(|v| v["label"].as_str()
-            .is_some_and(|s| s.starts_with("まだであってないよ"))).unwrap();
+        ))
+        .unwrap();
+        let source = screens
+            .iter()
+            .find(|v| {
+                v["label"]
+                    .as_str()
+                    .is_some_and(|s| s.starts_with("まだであってないよ"))
+            })
+            .unwrap();
         let mut pixels = vec![0xff00ff00; WIDTH * WIDTH];
         for (y, row) in source["rows"].as_array().unwrap().iter().enumerate() {
             let row = row.as_str().unwrap().as_bytes();
@@ -1192,8 +1273,12 @@ mod tests {
     fn family_card_units_follow_changing_digits() {
         let screens: Vec<serde_json::Value> = serde_json::from_str(include_str!(
             "../../../tools/fixtures/sweets-full-screens.json"
-        )).unwrap();
-        let screen = screens.iter().find(|s| s["label"] == "1代目 ふわつのっち 0才").unwrap();
+        ))
+        .unwrap();
+        let screen = screens
+            .iter()
+            .find(|s| s["label"] == "1代目 ふわつのっち 0才")
+            .unwrap();
         let mut pixels = vec![0xff00ff00; WIDTH * WIDTH];
         for (y, row) in screen["rows"].as_array().unwrap().iter().enumerate() {
             for (x, ch) in row.as_str().unwrap().bytes().enumerate() {
@@ -1207,7 +1292,8 @@ mod tests {
         }
         let font: Vec<serde_json::Value> = serde_json::from_str(include_str!(
             "../../../tools/fixtures/sweets-small-glyphs.json"
-        )).unwrap();
+        ))
+        .unwrap();
         for (ch, x, y, background) in [('2', 109, 1, 0xfffffac5), ('3', 43, 84, 0xffffffff)] {
             let glyph = font.iter().find(|g| g["char"] == ch.to_string()).unwrap();
             for (dy, row) in glyph["rows"].as_array().unwrap().iter().enumerate() {
@@ -1224,7 +1310,9 @@ mod tests {
         let one = font.iter().find(|g| g["char"] == "1").unwrap();
         for (dy, row) in one["rows"].as_array().unwrap().iter().enumerate() {
             for (dx, p) in row.as_str().unwrap().bytes().enumerate() {
-                if p == b'#' { pixels[(1 + dy) * WIDTH + 100 + dx] = 0xff000080; }
+                if p == b'#' {
+                    pixels[(1 + dy) * WIDTH + 100 + dx] = 0xff000080;
+                }
             }
         }
         assert_eq!(read(&pixels), "12代目 ふわつのっち 3才");
@@ -1366,17 +1454,60 @@ fn small_candidates(
         // Units on the family profile card use the same 9px advance as the
         // small font, but are separate bitmaps rather than page-04 codes.
         for (ch, pattern) in [
-            ('才', ["..........", "...#......", "...#......", "#######...", "...#......", "...###....", "..##......", "##.#......", "...#......"]),
-            ('代', ["..........", "....#.#.#.", "...#..#...", "..##.####.", ".#.#..#...", "...#..#...", "...#..#...", "...#...##.", ".........."]),
-            ('目', ["..........", ".####.....", ".#..#.....", ".####.....", ".#..#.....", ".####.....", ".#..#.....", ".####.....", ".........."]),
+            (
+                '才',
+                [
+                    "..........",
+                    "...#......",
+                    "...#......",
+                    "#######...",
+                    "...#......",
+                    "...###....",
+                    "..##......",
+                    "##.#......",
+                    "...#......",
+                ],
+            ),
+            (
+                '代',
+                [
+                    "..........",
+                    "....#.#.#.",
+                    "...#..#...",
+                    "..##.####.",
+                    ".#.#..#...",
+                    "...#..#...",
+                    "...#..#...",
+                    "...#...##.",
+                    "..........",
+                ],
+            ),
+            (
+                '目',
+                [
+                    "..........",
+                    ".####.....",
+                    ".#..#.....",
+                    ".####.....",
+                    ".#..#.....",
+                    ".####.....",
+                    ".#..#.....",
+                    ".####.....",
+                    "..........",
+                ],
+            ),
         ] {
             let mut rows = [0u16; 9];
             for (y, row) in pattern.iter().enumerate() {
                 for (x, p) in row.bytes().enumerate() {
-                    if p == b'#' { rows[y] |= 1 << x; }
+                    if p == b'#' {
+                        rows[y] |= 1 << x;
+                    }
                 }
             }
-            font.entry(rows.map(|r| r & 0x1fe)).or_default().push((rows, ch));
+            font.entry(rows.map(|r| r & 0x1fe))
+                .or_default()
+                .push((rows, ch));
         }
         font
     });
@@ -1424,7 +1555,10 @@ fn small_candidates(
                     let mut viable: Vec<char> = options
                         .iter()
                         .filter(|(pattern, _)| {
-                            pattern.iter().zip(rows).all(|(a, b)| (a & 0x1ff) == (b & 0x1ff))
+                            pattern
+                                .iter()
+                                .zip(rows)
+                                .all(|(a, b)| (a & 0x1ff) == (b & 0x1ff))
                         })
                         .map(|(_, ch)| *ch)
                         .collect();
@@ -1443,7 +1577,10 @@ fn small_candidates(
                     // accepting extra ink there makes ロ look like コ and U
                     // look like J when the word is absent from the lexicon.
                     .filter(|(pattern, _)| {
-                        pattern.iter().zip(rows).all(|(a, b)| (a & 0x1ff) == (b & 0x1ff))
+                        pattern
+                            .iter()
+                            .zip(rows)
+                            .all(|(a, b)| (a & 0x1ff) == (b & 0x1ff))
                     })
                     .map(|(_, ch)| *ch)
                     .collect();
@@ -1458,13 +1595,16 @@ fn small_candidates(
     let mut lines = Vec::new();
     for y in 0..=WIDTH - 9 {
         let blank_cell = |start: usize| {
-            start + 9 <= WIDTH && (y..y + 9).all(|yy| {
-                (start..start + 9).all(|cx| {
-                    let p = pixels[yy * WIDTH + cx];
-                    !ink[yy][cx] && (p >> 16) & 255 >= 215
-                        && (p >> 8) & 255 >= 215 && p & 255 >= 185
+            start + 9 <= WIDTH
+                && (y..y + 9).all(|yy| {
+                    (start..start + 9).all(|cx| {
+                        let p = pixels[yy * WIDTH + cx];
+                        !ink[yy][cx]
+                            && (p >> 16) & 255 >= 215
+                            && (p >> 8) & 255 >= 215
+                            && p & 255 >= 185
+                    })
                 })
-            })
         };
         for x in 0..=WIDTH - 10 {
             if found[y][x].is_none() || (x >= 9 && found[y][x - 9].is_some()) {
@@ -1495,7 +1635,9 @@ fn small_candidates(
                         if cells.is_empty() || next > WIDTH - 10 || found[y][next].is_none() {
                             break;
                         }
-                        for _ in 0..(next - xx) / 9 { cells.push(vec![' ']); }
+                        for _ in 0..(next - xx) / 9 {
+                            cells.push(vec![' ']);
+                        }
                         xx = next;
                         continue;
                     }
@@ -1535,8 +1677,7 @@ fn small_candidates(
                 }
                 dark > 4 && other == 0
             };
-            if suspicious(x.saturating_sub(9), x)
-                || suspicious(xx.min(WIDTH), (xx + 9).min(WIDTH))
+            if suspicious(x.saturating_sub(9), x) || suspicious(xx.min(WIDTH), (xx + 9).min(WIDTH))
             {
                 continue;
             }
@@ -1554,21 +1695,29 @@ fn small_candidates(
     let mut merged_numbers = Vec::new();
     for line in &mut lines {
         let (unit_y, unit_x, text) = line;
-        if text != "代目" || *unit_y < 9 { continue; }
+        if text != "代目" || *unit_y < 9 {
+            continue;
+        }
         let mut candidates = Vec::new();
         for y in unit_y.saturating_sub(12)..=unit_y.saturating_sub(9) {
             for x in unit_x.saturating_sub(18)..=(*unit_x + 18).min(WIDTH - 10) {
-                if x >= 9 && found[y][x - 9].is_some() { continue; }
+                if x >= 9 && found[y][x - 9].is_some() {
+                    continue;
+                }
                 let mut xx = x;
                 let mut digits = String::new();
                 while xx <= WIDTH - 10 {
                     let Some(options) = &found[y][xx] else { break };
                     let [digit] = options.as_slice() else { break };
-                    if !digit.is_ascii_digit() { break; }
+                    if !digit.is_ascii_digit() {
+                        break;
+                    }
                     digits.push(*digit);
                     xx += 9;
                 }
-                if !digits.is_empty() { candidates.push((y, x, digits)); }
+                if !digits.is_empty() {
+                    candidates.push((y, x, digits));
+                }
             }
         }
         if let [(y, x, digits)] = candidates.as_slice() {
@@ -1578,9 +1727,11 @@ fn small_candidates(
             *text = format!("{digits}代目");
         }
     }
-    lines.retain(|(y, x, text)| !merged_numbers.iter().any(|(dy, dx, digits)| {
-        y == dy && x == dx && text == digits
-    }));
+    lines.retain(|(y, x, text)| {
+        !merged_numbers
+            .iter()
+            .any(|(dy, dx, digits)| y == dy && x == dx && text == digits)
+    });
     // Some profile-panel lines are clipped one pixel at their top edge.
     // Accept this weaker match only for a known whole word immediately below
     // an independently matched small-font line.
@@ -1713,18 +1864,14 @@ fn clock_lines(ink: &[[bool; WIDTH]; WIDTH]) -> Vec<(usize, usize, String)> {
                     }
                     out.push((y, x, time));
                 }
-            } else if blank(x - 3, y + 13, 8, 14)
-                && blank(x + 6, y + 13, 8, 14)
-            {
+            } else if blank(x - 3, y + 13, 8, 14) && blank(x + 6, y + 13, 8, 14) {
                 if let (Some(m1), Some(m2)) = (minute_tens, minute_ones) {
                     let minute = format!("{m1}{m2}");
                     if minute.parse::<u8>().is_ok_and(|v| v < 60) {
                         out.push((y, x, format!("{} :{minute}", marker.text)));
                     }
                 }
-            } else if blank(x + 20, y + 13, 8, 14)
-                && blank(x + 29, y + 13, 8, 14)
-            {
+            } else if blank(x + 20, y + 13, 8, 14) && blank(x + 29, y + 13, 8, 14) {
                 if let (Some(first), Some(h)) = (first.as_deref(), hour_ones) {
                     let hour = format!("{first}{h}");
                     if hour.parse::<u8>().is_ok_and(|v| (1..=12).contains(&v)) {
@@ -1752,18 +1899,14 @@ fn clock_lines(ink: &[[bool; WIDTH]; WIDTH]) -> Vec<(usize, usize, String)> {
                 {
                     out.push((y - 13, x - 1, format!("{month}/{day}")));
                 }
-            } else if blank(x - 1, y - 13, 6, 10)
-                && blank(x + 6, y - 13, 6, 10)
-            {
+            } else if blank(x - 1, y - 13, 6, 10) && blank(x + 6, y - 13, 6, 10) {
                 if let (Some(dfirst), Some(d)) = (dfirst.as_deref(), day_ones) {
                     let day = format!("{dfirst}{d}");
                     if day.parse::<u8>().is_ok_and(|v| (1..=31).contains(&v)) {
                         out.push((y - 13, x - 1, format!("/{day}")));
                     }
                 }
-            } else if blank(x + 18, y - 13, 6, 10)
-                && blank(x + 26, y - 13, 6, 10)
-            {
+            } else if blank(x + 18, y - 13, 6, 10) && blank(x + 26, y - 13, 6, 10) {
                 if let (Some(mfirst), Some(m)) = (mfirst.as_deref(), month_ones) {
                     let month = format!("{mfirst}{m}");
                     if month.parse::<u8>().is_ok_and(|v| (1..=12).contains(&v)) {

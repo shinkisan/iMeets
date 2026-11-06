@@ -16,9 +16,9 @@
 use pocket_meets::session::Session;
 use std::collections::VecDeque;
 use std::io::{Read, Write};
-use std::sync::mpsc;
 use std::net::{TcpListener, TcpStream};
 use std::path::Path;
+use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
 fn step(s: &mut Session, sec: f64) {
@@ -117,7 +117,13 @@ fn parse_payload(payload: &str) -> Option<(Vec<String>, u16, String)> {
     for part in query.split('&') {
         let (k, v) = part.split_once('=')?;
         match k {
-            "h" => hosts = v.split(',').filter(|x| !x.is_empty()).map(|x| x.to_string()).collect(),
+            "h" => {
+                hosts = v
+                    .split(',')
+                    .filter(|x| !x.is_empty())
+                    .map(|x| x.to_string())
+                    .collect()
+            }
             "p" => port = v.parse().ok(),
             "t" => token = Some(v.to_string()),
             _ => {}
@@ -127,8 +133,10 @@ fn parse_payload(payload: &str) -> Option<(Vec<String>, u16, String)> {
 }
 fn write_qr(payload: &str) -> bool {
     let script = concat!(env!("CARGO_MANIFEST_DIR"), "/../../tools/qr/qrgen.cjs");
-    let default = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tools/qr/node_modules");
-    let node_path = std::env::var("QR_NODE_PATH").unwrap_or_else(|_| default.to_string_lossy().into_owned());
+    let default =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tools/qr/node_modules");
+    let node_path =
+        std::env::var("QR_NODE_PATH").unwrap_or_else(|_| default.to_string_lossy().into_owned());
     std::process::Command::new("node")
         .arg(script)
         .arg(payload)
@@ -146,10 +154,22 @@ fn main() {
     let verbose = std::env::var("IRLAN_VERBOSE").is_ok();
     let (base, secs, hour, option, stream) = if role == "host" {
         let base = std::env::args().nth(2).expect("save");
-        let port: u16 = std::env::args().nth(3).and_then(|v| v.parse().ok()).unwrap_or(47000);
-        let secs: f64 = std::env::args().nth(4).and_then(|v| v.parse().ok()).unwrap_or(40.0);
-        let hour: f64 = std::env::args().nth(5).and_then(|v| v.parse().ok()).unwrap_or(10.0);
-        let option: usize = std::env::args().nth(6).and_then(|v| v.parse().ok()).unwrap_or(0);
+        let port: u16 = std::env::args()
+            .nth(3)
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(47000);
+        let secs: f64 = std::env::args()
+            .nth(4)
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(40.0);
+        let hour: f64 = std::env::args()
+            .nth(5)
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(10.0);
+        let option: usize = std::env::args()
+            .nth(6)
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(0);
         let listener = TcpListener::bind(("0.0.0.0", port)).expect("bind");
         let port = listener.local_addr().unwrap().port();
         let ips = local_ipv4();
@@ -171,15 +191,27 @@ fn main() {
     } else {
         let payload = std::env::args().nth(2).expect("payload");
         let payload = if Path::new(&payload).is_file() {
-            std::fs::read_to_string(&payload).unwrap_or_default().trim().to_string()
+            std::fs::read_to_string(&payload)
+                .unwrap_or_default()
+                .trim()
+                .to_string()
         } else {
             payload
         };
         let (hosts, port, _token) = parse_payload(&payload).expect("payload");
         let base = std::env::args().nth(3).expect("save");
-        let secs: f64 = std::env::args().nth(4).and_then(|v| v.parse().ok()).unwrap_or(40.0);
-        let hour: f64 = std::env::args().nth(5).and_then(|v| v.parse().ok()).unwrap_or(10.0);
-        let option: usize = std::env::args().nth(6).and_then(|v| v.parse().ok()).unwrap_or(0);
+        let secs: f64 = std::env::args()
+            .nth(4)
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(40.0);
+        let hour: f64 = std::env::args()
+            .nth(5)
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(10.0);
+        let option: usize = std::env::args()
+            .nth(6)
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(0);
         let mut stream = None;
         for host in &hosts {
             if let Ok(s) = TcpStream::connect_timeout(
@@ -204,17 +236,25 @@ fn main() {
     s.machine.stop_on_bluetooth = false;
     let mut stream = stream;
     stream.set_nodelay(true).unwrap();
-    stream.set_read_timeout(Some(Duration::from_secs(20))).unwrap();
+    stream
+        .set_read_timeout(Some(Duration::from_secs(20)))
+        .unwrap();
     send_line(&mut stream, "TAMA-LAN 1");
     let hello = read_line(&mut stream).unwrap_or_default();
-    if verbose { eprintln!("peer hello: {hello:?}"); }
+    if verbose {
+        eprintln!("peer hello: {hello:?}");
+    }
 
     // Same well-formed frame the local bridge uses to kick the firmware.
     let tab: Vec<u16> = (0..256)
         .map(|i| {
             let mut c = i as u16;
             for _ in 0..8 {
-                c = if c & 1 != 0 { (c >> 1) ^ 0x8408 } else { c >> 1 };
+                c = if c & 1 != 0 {
+                    (c >> 1) ^ 0x8408
+                } else {
+                    c >> 1
+                };
             }
             c
         })
@@ -232,50 +272,76 @@ fn main() {
     f.extend(p);
     f.push(0xC0);
     if !native {
-    let sub = open_submenu(&mut s);
-    if verbose { eprintln!("submenu: {sub:?}"); }
-    // Host proposes when option is 2; the joining side always waits in あそぶ.
-    let pick = if option == 2 && role == "host" { 2 } else if option == 2 { 0 } else { option };
-    for _ in 0..pick {
-        tap(&mut s, 0);
-    }
-    tap(&mut s, 1);
-    step(&mut s, 2.0);
-    if verbose { eprintln!("after select: {:?}", text(&mut s)); }
+        let sub = open_submenu(&mut s);
+        if verbose {
+            eprintln!("submenu: {sub:?}");
+        }
+        // Host proposes when option is 2; the joining side always waits in あそぶ.
+        let pick = if option == 2 && role == "host" {
+            2
+        } else if option == 2 {
+            0
+        } else {
+            option
+        };
+        for _ in 0..pick {
+            tap(&mut s, 0);
+        }
+        tap(&mut s, 1);
+        step(&mut s, 2.0);
+        if verbose {
+            eprintln!("after select: {:?}", text(&mut s));
+        }
 
-    // Tell the peer we are at the waiting screen, then let the host open
-    // the link and the guest follow 0.5 s later.
-    if verbose { eprintln!("{role}: send WAIT"); }
-    send_line(&mut stream, "WAIT");
-    let _ = read_line(&mut stream);
-    if verbose { eprintln!("{role}: read WAIT"); }
-    if role == "host" {
-        std::thread::sleep(Duration::from_millis(1000));
-        if verbose { eprintln!("host: send GO"); }
-        send_line(&mut stream, "GO");
-    } else {
+        // Tell the peer we are at the waiting screen, then let the host open
+        // the link and the guest follow 0.5 s later.
+        if verbose {
+            eprintln!("{role}: send WAIT");
+        }
+        send_line(&mut stream, "WAIT");
         let _ = read_line(&mut stream);
-        if verbose { eprintln!("join: read GO"); }
-        std::thread::sleep(Duration::from_millis(500));
-    }
-    let _ = s.key(1, true);
-    step(&mut s, 0.2);
-    let _ = s.key(1, false);
-    if role == "host" {
-        // Match the local bridge: the host's emulated clock leads by 0.5 s.
-        step(&mut s, 0.5);
-    }
-    step(&mut s, 1.0);
-    if verbose { eprintln!("after start: {:?}", text(&mut s)); }
-    if std::env::var("IRLAN_NO_KICK").is_err() {
-        for byte in &f {
-            s.machine.sys.uart_receive(*byte);
+        if verbose {
+            eprintln!("{role}: read WAIT");
+        }
+        if role == "host" {
+            std::thread::sleep(Duration::from_millis(1000));
+            if verbose {
+                eprintln!("host: send GO");
+            }
+            send_line(&mut stream, "GO");
+        } else {
+            let _ = read_line(&mut stream);
+            if verbose {
+                eprintln!("join: read GO");
+            }
+            std::thread::sleep(Duration::from_millis(500));
+        }
+        let _ = s.key(1, true);
+        step(&mut s, 0.2);
+        let _ = s.key(1, false);
+        if role == "host" {
+            // Match the local bridge: the host's emulated clock leads by 0.5 s.
+            step(&mut s, 0.5);
+        }
+        step(&mut s, 1.0);
+        if verbose {
+            eprintln!("after start: {:?}", text(&mut s));
+        }
+        if std::env::var("IRLAN_NO_KICK").is_err() {
+            for byte in &f {
+                s.machine.sys.uart_receive(*byte);
+            }
         }
     }
-    }
-    stream.set_read_timeout(Some(Duration::from_secs(5))).unwrap();
+    stream
+        .set_read_timeout(Some(Duration::from_secs(5)))
+        .unwrap();
     fn send_frame(stream: &mut TcpStream, typ: u8, data: &[u8]) {
-        let mut h = [typ, (data.len() & 0xFF) as u8, ((data.len() >> 8) & 0xFF) as u8];
+        let mut h = [
+            typ,
+            (data.len() & 0xFF) as u8,
+            ((data.len() >> 8) & 0xFF) as u8,
+        ];
         let _ = stream.write_all(&mut h);
         if !data.is_empty() {
             let _ = stream.write_all(data);
@@ -365,7 +431,12 @@ fn main() {
         let out = s.machine.sys.uart_take();
         if !out.is_empty() {
             if verbose && i < 3 {
-                eprintln!("i={i} now={:.2} out={} first={:02X?}", s.machine.now(), out.len(), &out[..out.len().min(24)]);
+                eprintln!(
+                    "i={i} now={:.2} out={} first={:02X?}",
+                    s.machine.now(),
+                    out.len(),
+                    &out[..out.len().min(24)]
+                );
             }
             send_frame(&mut stream, 0, &out);
             sent += out.len();
@@ -379,7 +450,12 @@ fn main() {
             match recv_frame(&mut stream) {
                 Some((0, data)) => {
                     if verbose && i < 3 {
-                        eprintln!("i={i} now={:.2} in={} first={:02X?}", s.machine.now(), data.len(), &data[..data.len().min(24)]);
+                        eprintln!(
+                            "i={i} now={:.2} in={} first={:02X?}",
+                            s.machine.now(),
+                            data.len(),
+                            &data[..data.len().min(24)]
+                        );
                     }
                     for b in data {
                         s.machine.sys.uart_receive(b);

@@ -14,11 +14,19 @@ pub struct CareTimeline {
 
 impl CareTimeline {
     pub fn at(now: f64) -> Self {
-        Self { care_at: now, paused: false, pause_started: None }
+        Self {
+            care_at: now,
+            paused: false,
+            pause_started: None,
+        }
     }
 
     pub fn due(&self, now: f64) -> f64 {
-        if self.paused { 0.0 } else { (now - self.care_at).max(0.0) }
+        if self.paused {
+            0.0
+        } else {
+            (now - self.care_at).max(0.0)
+        }
     }
 
     /// `paused` true freezes care. False jumps `care_at` to `now` so the
@@ -50,7 +58,10 @@ impl CareTimeline {
         fs::create_dir_all(folder)?;
         let path = folder.join("care.json");
         let tmp = folder.join("care.json.tmp");
-        fs::write(&tmp, serde_json::to_string(self).unwrap_or_else(|_| "{}".into()))?;
+        fs::write(
+            &tmp,
+            serde_json::to_string(self).unwrap_or_else(|_| "{}".into()),
+        )?;
         fs::rename(tmp, path)
     }
 }

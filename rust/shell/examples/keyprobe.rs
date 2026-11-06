@@ -1,6 +1,6 @@
 //! Probes the firmware key scan: phase sensitivity and minimum hold.
-use std::path::Path;
 use pocket_meets::session::Session;
+use std::path::Path;
 
 fn hash(s: &mut Session) -> u64 {
     let mut px = [0u32; 16_384];
@@ -20,20 +20,30 @@ fn open(rom: &str, saves: &str) -> Session {
     }
     if s.asleep() {
         let _ = s.key(1, true);
-        for _ in 0..20 { s.step(0.02); }
+        for _ in 0..20 {
+            s.step(0.02);
+        }
         let _ = s.key(1, false);
-        for _ in 0..60 { s.step(0.02); }
+        for _ in 0..60 {
+            s.step(0.02);
+        }
     }
     let _ = s.key(0, true);
-    for _ in 0..20 { s.step(0.02); }
+    for _ in 0..20 {
+        s.step(0.02);
+    }
     let _ = s.key(0, false);
-    for _ in 0..120 { s.step(0.02); }
+    for _ in 0..120 {
+        s.step(0.02);
+    }
     s
 }
 
 fn probe(rom: &str, saves: &str, offset_ms: u64, hold_ms: u64) -> Option<u64> {
     let mut s = open(rom, saves);
-    for _ in 0..offset_ms { s.step(0.001); }
+    for _ in 0..offset_ms {
+        s.step(0.001);
+    }
     let before = hash(&mut s);
     let t0 = s.seconds();
     s.machine.sys.live_keys[0] = true;
@@ -58,9 +68,17 @@ fn main() {
     let rom = std::env::args().nth(1).unwrap();
     let saves = std::env::args().nth(2).unwrap();
     for offset in [0, 7, 15, 23, 31, 47] {
-        println!("offset {:2} ms, hold 200 ms -> {:?} ms", offset, probe(&rom, &saves, offset, 200));
+        println!(
+            "offset {:2} ms, hold 200 ms -> {:?} ms",
+            offset,
+            probe(&rom, &saves, offset, 200)
+        );
     }
     for hold in [1, 4, 8, 16, 24, 32, 48, 64] {
-        println!("offset 0 ms, hold {:3} ms -> {:?} ms", hold, probe(&rom, &saves, 0, hold));
+        println!(
+            "offset 0 ms, hold {:3} ms -> {:?} ms",
+            hold,
+            probe(&rom, &saves, 0, hold)
+        );
     }
 }

@@ -41,7 +41,12 @@ pub fn undo_allowed(name: &str) -> Result<(), &'static str> {
 /// Write the pre-edit snapshot, run `body`, rename on success.
 /// On failure the pending bytes are returned so the caller can import them.
 /// The pending file is removed either way.
-pub fn transact(pending: &Path, final_path: &Path, snapshot: &[u8], body: impl FnOnce() -> Result<(), String>) -> Result<(), String> {
+pub fn transact(
+    pending: &Path,
+    final_path: &Path,
+    snapshot: &[u8],
+    body: impl FnOnce() -> Result<(), String>,
+) -> Result<(), String> {
     if let Some(parent) = pending.parent() {
         fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }
@@ -63,7 +68,10 @@ mod tests {
 
     #[test]
     fn refusal_undo_gate_and_backup_files() {
-        assert_eq!(refuse(2, false, false), Some("finish or cancel Mixing Meets first"));
+        assert_eq!(
+            refuse(2, false, false),
+            Some("finish or cancel Mixing Meets first")
+        );
         assert_eq!(refuse(0, true, false), Some("Shelf blocked."));
         assert_eq!(refuse(0, false, true), Some("resume your pet first"));
         assert_eq!(refuse(0, false, false), None);
@@ -71,7 +79,10 @@ mod tests {
 
         assert!(undo_allowed("Sanrio (JP v056)").is_ok());
         assert_eq!(undo_allowed("sanrio"), Err("Switch to Sanrio first"));
-        assert_eq!(undo_allowed("Fairy (EN v057)"), Err("Switch to Sanrio first"));
+        assert_eq!(
+            undo_allowed("Fairy (EN v057)"),
+            Err("Switch to Sanrio first")
+        );
 
         let root = crate::tmpdir("shelf");
         let pending = root.join("ShelfBackups/before-shelf.t18s.pending");

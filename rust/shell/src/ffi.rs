@@ -35,7 +35,9 @@ fn c_str(p: *const c_char) -> Option<String> {
 }
 
 fn owned(s: impl AsRef<str>) -> *mut c_char {
-    CString::new(s.as_ref().replace('\0', "")).unwrap_or_else(|_| CString::new("").unwrap()).into_raw()
+    CString::new(s.as_ref().replace('\0', ""))
+        .unwrap_or_else(|_| CString::new("").unwrap())
+        .into_raw()
 }
 
 fn session<'a>(p: *mut Session) -> Option<&'a mut Session> {
@@ -83,7 +85,9 @@ pub extern "C" fn pm_build() -> i32 {
 #[no_mangle]
 pub extern "C" fn pm_rom_kind(path: *const c_char) -> i32 {
     let Some(path) = c_str(path) else { return 0 };
-    let Ok(bytes) = std::fs::read(path) else { return -1 };
+    let Ok(bytes) = std::fs::read(path) else {
+        return -1;
+    };
     match crate::rom::classify(&bytes) {
         crate::rom::ImageClass::Supported { version, .. } => version as i32,
         _ => 0,
@@ -92,8 +96,12 @@ pub extern "C" fn pm_rom_kind(path: *const c_char) -> i32 {
 
 #[no_mangle]
 pub extern "C" fn pm_rom_name(path: *const c_char) -> *mut c_char {
-    let Some(path) = c_str(path) else { return ptr::null_mut() };
-    let Ok(bytes) = std::fs::read(path) else { return ptr::null_mut() };
+    let Some(path) = c_str(path) else {
+        return ptr::null_mut();
+    };
+    let Ok(bytes) = std::fs::read(path) else {
+        return ptr::null_mut();
+    };
     match crate::rom::classify(&bytes) {
         crate::rom::ImageClass::Supported { stem, .. } => owned(stem),
         _ => ptr::null_mut(),
@@ -128,7 +136,9 @@ pub extern "C" fn pm_import_rom(root: *const c_char, path: *const c_char) -> *mu
 
 #[no_mangle]
 pub extern "C" fn pm_library_json(root: *const c_char) -> *mut c_char {
-    let Some(root) = c_str(root) else { return owned("[]"); };
+    let Some(root) = c_str(root) else {
+        return owned("[]");
+    };
     owned(json!(library::list_library(Path::new(&root))).to_string())
 }
 
@@ -154,15 +164,21 @@ pub extern "C" fn pm_settings_write(path: *const c_char, json_text: *const c_cha
 
 #[no_mangle]
 pub extern "C" fn pm_plan_json(path: *const c_char) -> *mut c_char {
-    let Some(path) = c_str(path) else { return owned("{}"); };
+    let Some(path) = c_str(path) else {
+        return owned("{}");
+    };
     let plan = settings::load_plan(Path::new(&path));
     owned(serde_json::to_string(&plan).unwrap_or_else(|_| "{}".into()))
 }
 
 #[no_mangle]
 pub extern "C" fn pm_plan_store(path: *const c_char, json_text: *const c_char) -> i32 {
-    let (Some(path), Some(text)) = (c_str(path), c_str(json_text)) else { return -1 };
-    let Ok(plan) = serde_json::from_str::<CarePlan>(&text) else { return -1 };
+    let (Some(path), Some(text)) = (c_str(path), c_str(json_text)) else {
+        return -1;
+    };
+    let Ok(plan) = serde_json::from_str::<CarePlan>(&text) else {
+        return -1;
+    };
     match settings::store_plan(Path::new(&path), &plan) {
         Ok(()) => 0,
         Err(_) => -1,
@@ -170,7 +186,9 @@ pub extern "C" fn pm_plan_store(path: *const c_char, json_text: *const c_char) -
 }
 
 fn open_common(rom: *const c_char, saves: *const c_char, paused: Option<bool>) -> *mut Session {
-    let (Some(rom), Some(saves)) = (c_str(rom), c_str(saves)) else { return ptr::null_mut() };
+    let (Some(rom), Some(saves)) = (c_str(rom), c_str(saves)) else {
+        return ptr::null_mut();
+    };
     let result = match paused {
         Some(p) => Session::open_care(Path::new(&rom), Path::new(&saves), p),
         None => Session::open(Path::new(&rom), Path::new(&saves)),
@@ -201,14 +219,24 @@ pub extern "C" fn pm_call_decision(
     last_ms: i64,
     not_before_ms: i64,
 ) -> *mut c_char {
-    let d = crate::notify::on_call(take_call != 0, visible != 0, muted != 0, now_ms, last_ms, not_before_ms);
-    owned(json!({
-        "detected": d.detected,
-        "banner": d.banner,
-        "channel": d.channel,
-        "not_before_ms": d.not_before_ms,
-        "last_ms": d.last_ms,
-    }).to_string())
+    let d = crate::notify::on_call(
+        take_call != 0,
+        visible != 0,
+        muted != 0,
+        now_ms,
+        last_ms,
+        not_before_ms,
+    );
+    owned(
+        json!({
+            "detected": d.detected,
+            "banner": d.banner,
+            "channel": d.channel,
+            "not_before_ms": d.not_before_ms,
+            "last_ms": d.last_ms,
+        })
+        .to_string(),
+    )
 }
 
 #[no_mangle]
@@ -217,14 +245,20 @@ pub extern "C" fn pm_alarm_post(event_ms: i64, now_ms: i64, visible: i32, missed
 }
 
 #[no_mangle]
-pub extern "C" fn pm_shelf_list(root: *const c_char, tab: *const c_char, language: *const c_char) -> *mut c_char {
+pub extern "C" fn pm_shelf_list(
+    root: *const c_char,
+    tab: *const c_char,
+    language: *const c_char,
+) -> *mut c_char {
     let (Some(root), Some(tab), Some(language)) = (c_str(root), c_str(tab), c_str(language)) else {
         return owned(r#"{"ok":false,"error":"null session or request"}"#);
     };
     let root_path = Path::new(&root);
     let settings = settings::load_settings(&root_path.join("settings"));
     if settings.shelf_pack.is_empty() {
-        return owned(json!({"ok": false, "error": copy::text(Lang::En, "load_pack_first")}).to_string());
+        return owned(
+            json!({"ok": false, "error": copy::text(Lang::En, "load_pack_first")}).to_string(),
+        );
     }
     let dir = root_path.join("TamaShelf").join(&settings.shelf_pack);
     match shelf::pack::list_items(&dir, &tab, &language) {
@@ -281,7 +315,11 @@ pub extern "C" fn pm_open(rom: *const c_char, saves: *const c_char) -> *mut Sess
 }
 
 #[no_mangle]
-pub extern "C" fn pm_open_care(rom: *const c_char, saves: *const c_char, paused: i32) -> *mut Session {
+pub extern "C" fn pm_open_care(
+    rom: *const c_char,
+    saves: *const c_char,
+    paused: i32,
+) -> *mut Session {
     open_common(rom, saves, Some(paused != 0))
 }
 
@@ -294,21 +332,32 @@ pub extern "C" fn pm_close(p: *mut Session) {
 
 #[no_mangle]
 pub extern "C" fn pm_name(p: *mut Session) -> *mut c_char {
-    session(p).map(|s| owned(s.name())).unwrap_or(ptr::null_mut())
+    session(p)
+        .map(|s| owned(s.name()))
+        .unwrap_or(ptr::null_mut())
 }
 
 #[no_mangle]
 pub extern "C" fn pm_error(p: *mut Session) -> *mut c_char {
-    session(p).map(|s| owned(&s.error)).unwrap_or(ptr::null_mut())
+    session(p)
+        .map(|s| owned(&s.error))
+        .unwrap_or(ptr::null_mut())
 }
 
 #[no_mangle]
 pub extern "C" fn pm_notice(p: *mut Session) -> *mut c_char {
-    session(p).map(|s| owned(&s.notice)).unwrap_or(ptr::null_mut())
+    session(p)
+        .map(|s| owned(&s.notice))
+        .unwrap_or(ptr::null_mut())
 }
 
 #[no_mangle]
-pub extern "C" fn pm_dump_window(p: *mut Session, start: u32, len: u32, path: *const c_char) -> i32 {
+pub extern "C" fn pm_dump_window(
+    p: *mut Session,
+    start: u32,
+    len: u32,
+    path: *const c_char,
+) -> i32 {
     let (Some(s), Some(path)) = (session(p), c_str(path)) else {
         return -1;
     };
@@ -317,7 +366,9 @@ pub extern "C" fn pm_dump_window(p: *mut Session, start: u32, len: u32, path: *c
         return -3;
     }
     let off = (start - tg18::SRAM_BASE) as usize;
-    let Some(end) = off.checked_add(len as usize) else { return -3 };
+    let Some(end) = off.checked_add(len as usize) else {
+        return -3;
+    };
     if end > sram.len() {
         return -3;
     }
@@ -351,7 +402,9 @@ pub unsafe extern "C" fn pm_menu_text(pixels: *const u32, len: usize) -> *mut c_
     if pixels.is_null() || len != 128 * 128 {
         return owned("");
     }
-    owned(crate::menu_text::read(std::slice::from_raw_parts(pixels, len)))
+    owned(crate::menu_text::read(std::slice::from_raw_parts(
+        pixels, len,
+    )))
 }
 
 #[no_mangle]
@@ -426,8 +479,22 @@ pub extern "C" fn pm_display_awake(p: *mut Session, on: i32) {
 }
 
 #[no_mangle]
-pub extern "C" fn pm_display_hint(visible: i32, active: i32, catchup_done: i32, paused: i32, follow: i32, interactive: i32) -> i32 {
-    i32::from(crate::tick::display_hint(visible != 0, active != 0, catchup_done != 0, paused != 0, follow != 0, interactive != 0))
+pub extern "C" fn pm_display_hint(
+    visible: i32,
+    active: i32,
+    paused: i32,
+    follow: i32,
+    interactive: i32,
+    present: i32,
+) -> i32 {
+    i32::from(crate::tick::display_hint(
+        visible != 0,
+        active != 0,
+        paused != 0,
+        follow != 0,
+        interactive != 0,
+        present != 0,
+    ))
 }
 
 #[no_mangle]
@@ -467,8 +534,12 @@ pub extern "C" fn pm_delete_current_save(p: *mut Session) -> i32 {
 
 #[no_mangle]
 pub extern "C" fn pm_import_save(p: *mut Session, path: *const c_char) -> *mut c_char {
-    let Some(s) = session(p) else { return owned(r#"{"ok":false,"error":"null session or request"}"#) };
-    let Some(path) = c_str(path) else { return owned(r#"{"ok":false,"error":"null session or request"}"#) };
+    let Some(s) = session(p) else {
+        return owned(r#"{"ok":false,"error":"null session or request"}"#);
+    };
+    let Some(path) = c_str(path) else {
+        return owned(r#"{"ok":false,"error":"null session or request"}"#);
+    };
     match s.import_save(Path::new(&path)) {
         Ok(()) => owned(r#"{"ok":true,"result":"save imported, you can continue"}"#),
         Err(e) => owned(json!({"ok": false, "error": e}).to_string()),
@@ -477,8 +548,12 @@ pub extern "C" fn pm_import_save(p: *mut Session, path: *const c_char) -> *mut c
 
 #[no_mangle]
 pub extern "C" fn pm_export_save(p: *mut Session, path: *const c_char) -> *mut c_char {
-    let Some(s) = session(p) else { return owned(r#"{"ok":false,"error":"null session or request"}"#) };
-    let Some(path) = c_str(path) else { return owned(r#"{"ok":false,"error":"null session or request"}"#) };
+    let Some(s) = session(p) else {
+        return owned(r#"{"ok":false,"error":"null session or request"}"#);
+    };
+    let Some(path) = c_str(path) else {
+        return owned(r#"{"ok":false,"error":"null session or request"}"#);
+    };
     match s.export_save(Path::new(&path)) {
         Ok(()) => owned(r#"{"ok":true,"result":"save exported"}"#),
         Err(e) => owned(json!({"ok": false, "error": e}).to_string()),
@@ -612,6 +687,7 @@ pub struct PmPumpIn {
     pub follow_system_sleep: i32,
     pub muted: i32,
     pub frame_ns: u64,
+    pub present: i32,
 }
 
 #[repr(C)]
@@ -637,8 +713,16 @@ pub struct PmPumpOut {
 }
 
 #[no_mangle]
-pub extern "C" fn pm_pump(p: *mut Session, inp: *const PmPumpIn, out: *mut PmPumpOut, pcm: *mut i16, pcm_cap: i32) -> i32 {
-    let (Some(s), Some(inp), Some(outp)) = (session(p), unsafe { inp.as_ref() }, unsafe { out.as_mut() }) else {
+pub extern "C" fn pm_pump(
+    p: *mut Session,
+    inp: *const PmPumpIn,
+    out: *mut PmPumpOut,
+    pcm: *mut i16,
+    pcm_cap: i32,
+) -> i32 {
+    let (Some(s), Some(inp), Some(outp)) =
+        (session(p), unsafe { inp.as_ref() }, unsafe { out.as_mut() })
+    else {
         return -1;
     };
     let got = s.pump(&PumpIn {
@@ -654,6 +738,7 @@ pub extern "C" fn pm_pump(p: *mut Session, inp: *const PmPumpIn, out: *mut PmPum
         follow_system_sleep: inp.follow_system_sleep != 0,
         muted: inp.muted != 0,
         frame_ns: inp.frame_ns,
+        present: inp.present != 0,
     });
     let n = if pcm.is_null() || pcm_cap <= 0 {
         0
@@ -699,7 +784,9 @@ pub extern "C" fn pm_control(p: *mut Session, request: *const c_char) -> *mut c_
 
 #[no_mangle]
 pub extern "C" fn pm_forecast_create(p: *mut Session, not_before: f64) -> *mut Forecast {
-    let Some(s) = session(p) else { return ptr::null_mut() };
+    let Some(s) = session(p) else {
+        return ptr::null_mut();
+    };
     let mut f = Forecast::new(&s.stem, not_before);
     if s.playable {
         f.snap = tg18::snapshot::Snapshot::capture(&s.machine).to_bytes();
@@ -708,7 +795,11 @@ pub extern "C" fn pm_forecast_create(p: *mut Session, not_before: f64) -> *mut F
 }
 
 #[no_mangle]
-pub extern "C" fn pm_forecast_open(rom: *const c_char, cursor: *const c_char, not_before: f64) -> *mut Forecast {
+pub extern "C" fn pm_forecast_open(
+    rom: *const c_char,
+    cursor: *const c_char,
+    not_before: f64,
+) -> *mut Forecast {
     let rom = c_str(rom).unwrap_or_default();
     let mut f = Forecast::new(&rom, not_before);
     if let Some(path) = c_str(cursor) {
@@ -729,12 +820,20 @@ pub extern "C" fn pm_forecast_run(p: *mut Forecast, budget: i32) -> i32 {
 
 #[no_mangle]
 pub extern "C" fn pm_forecast_at(p: *mut Forecast) -> f64 {
-    if p.is_null() { 0.0 } else { unsafe { (*p).at } }
+    if p.is_null() {
+        0.0
+    } else {
+        unsafe { (*p).at }
+    }
 }
 
 #[no_mangle]
 pub extern "C" fn pm_forecast_event(p: *mut Forecast) -> f64 {
-    if p.is_null() { 0.0 } else { unsafe { (*p).event.unwrap_or(0.0) } }
+    if p.is_null() {
+        0.0
+    } else {
+        unsafe { (*p).event.unwrap_or(0.0) }
+    }
 }
 
 #[no_mangle]
@@ -744,7 +843,11 @@ pub extern "C" fn pm_forecast_save(p: *mut Forecast, path: *const c_char) -> i32
     }
     let Some(path) = c_str(path) else { return -1 };
     let snap = unsafe { &(*p).snap };
-    let bytes: &[u8] = if snap.is_empty() { b"pocket-meets-forecast" } else { snap };
+    let bytes: &[u8] = if snap.is_empty() {
+        b"pocket-meets-forecast"
+    } else {
+        snap
+    };
     match std::fs::write(path, bytes) {
         Ok(()) => 0,
         Err(_) => -1,
@@ -766,18 +869,27 @@ pub extern "C" fn pm_forecast_seed(now_unix: f64, last_call_ms: i64) -> f64 {
 #[no_mangle]
 pub extern "C" fn pm_forecast_decide(code: i32, event_unix: f64, visible: i32) -> *mut c_char {
     let d = crate::forecast::decide(code, event_unix, visible != 0);
-    owned(json!({
-        "event_ms": d.event_ms,
-        "retry_in_ms": d.retry_in_ms,
-        "again_in_ms": d.again_in_ms,
-        "clear_retry": d.clear_retry,
-        "error": d.error,
-    }).to_string())
+    owned(
+        json!({
+            "event_ms": d.event_ms,
+            "retry_in_ms": d.retry_in_ms,
+            "again_in_ms": d.again_in_ms,
+            "clear_retry": d.clear_retry,
+            "error": d.error,
+        })
+        .to_string(),
+    )
 }
 
 #[no_mangle]
-pub extern "C" fn pm_forecast_retain(dir: *const c_char, epoch: i64, keep_json: *const c_char) -> i32 {
-    let (Some(dir), Some(keep_json)) = (c_str(dir), c_str(keep_json)) else { return -1 };
+pub extern "C" fn pm_forecast_retain(
+    dir: *const c_char,
+    epoch: i64,
+    keep_json: *const c_char,
+) -> i32 {
+    let (Some(dir), Some(keep_json)) = (c_str(dir), c_str(keep_json)) else {
+        return -1;
+    };
     let keep: Vec<String> = serde_json::from_str(&keep_json).unwrap_or_default();
     match crate::forecast::retain_epoch(Path::new(&dir), epoch.max(0) as u64, &keep) {
         Ok(()) => 0,
@@ -787,7 +899,9 @@ pub extern "C" fn pm_forecast_retain(dir: *const c_char, epoch: i64, keep_json: 
 
 #[no_mangle]
 pub extern "C" fn pm_zone(x: f32, y: f32, w: f32, h: f32, screenshots: i32) -> i32 {
-    appearance::zone(x, y, w, h, screenshots != 0).map(|z| z as i32).unwrap_or(0)
+    appearance::zone(x, y, w, h, screenshots != 0)
+        .map(|z| z as i32)
+        .unwrap_or(0)
 }
 
 #[no_mangle]
@@ -796,8 +910,24 @@ pub extern "C" fn pm_dot_strength(pixel_points: f32) -> f32 {
 }
 
 #[no_mangle]
-pub extern "C" fn pm_guide_visible(appearance_id: i32, ready: i32, focused: i32, shelf: i32, guide: i32, shots: i32, seen: i32) -> i32 {
-    i32::from(appearance::guide_visible(appearance_id, ready != 0, focused != 0, shelf != 0, guide, shots != 0, seen != 0))
+pub extern "C" fn pm_guide_visible(
+    appearance_id: i32,
+    ready: i32,
+    focused: i32,
+    shelf: i32,
+    guide: i32,
+    shots: i32,
+    seen: i32,
+) -> i32 {
+    i32::from(appearance::guide_visible(
+        appearance_id,
+        ready != 0,
+        focused != 0,
+        shelf != 0,
+        guide,
+        shots != 0,
+        seen != 0,
+    ))
 }
 
 #[no_mangle]
@@ -806,7 +936,16 @@ pub extern "C" fn pm_exit_allowed(ready: i32, shelf: i32, guide: i32) -> i32 {
 }
 
 #[no_mangle]
-pub extern "C" fn pm_png_name(y: i32, mo: u32, d: u32, h: u32, mi: u32, s: u32, millis: u32, hex8: *const c_char) -> *mut c_char {
+pub extern "C" fn pm_png_name(
+    y: i32,
+    mo: u32,
+    d: u32,
+    h: u32,
+    mi: u32,
+    s: u32,
+    millis: u32,
+    hex8: *const c_char,
+) -> *mut c_char {
     let hex8 = c_str(hex8).unwrap_or_else(|| "00000000".into());
     owned(appearance::png_name(y, mo, d, h, mi, s, millis, &hex8))
 }
@@ -846,21 +985,45 @@ pub extern "C" fn pm_notify_hex(bytes: *const u8, len: i32) -> *mut c_char {
 }
 
 #[no_mangle]
-pub extern "C" fn pm_gatt_rx(owner: i32, subscribed: i32, prepared: i32, offset: i32, len: i32, queued: i32) -> i32 {
-    match gatt::rx_write(owner != 0, subscribed != 0, prepared != 0, offset, len.max(0) as usize, queued.max(0) as usize) {
+pub extern "C" fn pm_gatt_rx(
+    owner: i32,
+    subscribed: i32,
+    prepared: i32,
+    offset: i32,
+    len: i32,
+    queued: i32,
+) -> i32 {
+    match gatt::rx_write(
+        owner != 0,
+        subscribed != 0,
+        prepared != 0,
+        offset,
+        len.max(0) as usize,
+        queued.max(0) as usize,
+    ) {
         Ok(()) => 0,
         Err(_) => 1,
     }
 }
 
 #[no_mangle]
-pub extern "C" fn pm_shelf_install(root: *const c_char, zip_path: *const c_char, settings_path: *const c_char) -> *mut c_char {
-    let (Some(root), Some(zip_path), Some(settings_path)) = (c_str(root), c_str(zip_path), c_str(settings_path)) else {
+pub extern "C" fn pm_shelf_install(
+    root: *const c_char,
+    zip_path: *const c_char,
+    settings_path: *const c_char,
+) -> *mut c_char {
+    let (Some(root), Some(zip_path), Some(settings_path)) =
+        (c_str(root), c_str(zip_path), c_str(settings_path))
+    else {
         return owned(r#"{"ok":false,"error":"null session or request"}"#);
     };
     let bytes = match std::fs::read(&zip_path) {
         Ok(b) => b,
-        Err(_) => return owned(json!({"ok": false, "error": copy::text(Lang::En, "cannot_read_zip")}).to_string()),
+        Err(_) => {
+            return owned(
+                json!({"ok": false, "error": copy::text(Lang::En, "cannot_read_zip")}).to_string(),
+            )
+        }
     };
     let mut s = settings::load_settings(Path::new(&settings_path));
     match shelf::pack::install_pack(Path::new(&root), &bytes, &mut s) {
@@ -875,8 +1038,12 @@ pub extern "C" fn pm_shelf_install(root: *const c_char, zip_path: *const c_char,
 
 #[no_mangle]
 pub extern "C" fn pm_shelf_send(p: *mut Session, path: *const c_char) -> *mut c_char {
-    let Some(s) = session(p) else { return owned(r#"{"ok":false,"error":"null session or request"}"#) };
-    let Some(path) = c_str(path) else { return owned(r#"{"ok":false,"error":"null session or request"}"#) };
+    let Some(s) = session(p) else {
+        return owned(r#"{"ok":false,"error":"null session or request"}"#);
+    };
+    let Some(path) = c_str(path) else {
+        return owned(r#"{"ok":false,"error":"null session or request"}"#);
+    };
     let bytes = match std::fs::read(path) {
         Ok(b) => b,
         Err(e) => return owned(json!({"ok": false, "error": e.to_string()}).to_string()),
@@ -889,7 +1056,9 @@ pub extern "C" fn pm_shelf_send(p: *mut Session, path: *const c_char) -> *mut c_
 
 #[no_mangle]
 pub extern "C" fn pm_shelf_balance(p: *mut Session, add: i32, amount: i32) -> *mut c_char {
-    let Some(s) = session(p) else { return owned(r#"{"ok":false,"error":"null session or request"}"#) };
+    let Some(s) = session(p) else {
+        return owned(r#"{"ok":false,"error":"null session or request"}"#);
+    };
     match s.set_balance(add != 0, amount as i64) {
         Ok(v) => owned(json!({"ok": true, "result": {"balance": v}}).to_string()),
         Err(e) => owned(json!({"ok": false, "error": e}).to_string()),
@@ -898,7 +1067,9 @@ pub extern "C" fn pm_shelf_balance(p: *mut Session, add: i32, amount: i32) -> *m
 
 #[no_mangle]
 pub extern "C" fn pm_shelf_undo(p: *mut Session) -> *mut c_char {
-    let Some(s) = session(p) else { return owned(r#"{"ok":false,"error":"null session or request"}"#) };
+    let Some(s) = session(p) else {
+        return owned(r#"{"ok":false,"error":"null session or request"}"#);
+    };
     match s.undo_shelf() {
         Ok(()) => owned(r#"{"ok":true,"result":{"message":"progress saved"}}"#),
         Err(e) => owned(json!({"ok": false, "error": e}).to_string()),
@@ -907,8 +1078,12 @@ pub extern "C" fn pm_shelf_undo(p: *mut Session) -> *mut c_char {
 
 #[no_mangle]
 pub extern "C" fn pm_shelf_marry(p: *mut Session, spec: *const c_char) -> *mut c_char {
-    let Some(s) = session(p) else { return owned(r#"{"ok":false,"error":"null session or request"}"#) };
-    let Some(text) = c_str(spec) else { return owned(r#"{"ok":false,"error":"null session or request"}"#) };
+    let Some(s) = session(p) else {
+        return owned(r#"{"ok":false,"error":"null session or request"}"#);
+    };
+    let Some(text) = c_str(spec) else {
+        return owned(r#"{"ok":false,"error":"null session or request"}"#);
+    };
     let value: Value = match serde_json::from_str(&text) {
         Ok(v) => v,
         Err(e) => return owned(json!({"ok": false, "error": e.to_string()}).to_string()),
@@ -919,7 +1094,15 @@ pub extern "C" fn pm_shelf_marry(p: *mut Session, spec: *const c_char) -> *mut c
             parts[i] = n.as_u64().unwrap_or(0) as u8;
         }
     }
-    let colors = value.get("colors").and_then(|v| v.as_array()).map(|a| a.iter().filter_map(|n| n.as_u64().map(|x| x as u8)).collect()).unwrap_or_default();
+    let colors = value
+        .get("colors")
+        .and_then(|v| v.as_array())
+        .map(|a| {
+            a.iter()
+                .filter_map(|n| n.as_u64().map(|x| x as u8))
+                .collect()
+        })
+        .unwrap_or_default();
     let choices = Choices {
         parts,
         pixels: [None, None, None, None],
@@ -927,17 +1110,26 @@ pub extern "C" fn pm_shelf_marry(p: *mut Session, spec: *const c_char) -> *mut c
         sex: value.get("sex").and_then(|v| v.as_u64()).unwrap_or(0) as u8,
         mode: value.get("mode").and_then(|v| v.as_u64()).unwrap_or(0) as u8,
         dna_n: value.get("dna_n").and_then(|v| v.as_u64()).unwrap_or(0) as u32,
-        random_sex: value.get("random_sex").and_then(|v| v.as_u64()).unwrap_or(0) as u8,
+        random_sex: value
+            .get("random_sex")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(0) as u8,
         random_dna: [0; 8],
     };
     match s.marry(&choices) {
-        Ok(plan) => owned(json!({"ok": true, "result": {"sex": plan.sex, "dna": plan.dna}}).to_string()),
+        Ok(plan) => {
+            owned(json!({"ok": true, "result": {"sex": plan.sex, "dna": plan.dna}}).to_string())
+        }
         Err(e) => owned(json!({"ok": false, "error": e}).to_string()),
     }
 }
 
 #[no_mangle]
-pub extern "C" fn pm_custom_import(root: *const c_char, path: *const c_char, kind: i32) -> *mut c_char {
+pub extern "C" fn pm_custom_import(
+    root: *const c_char,
+    path: *const c_char,
+    kind: i32,
+) -> *mut c_char {
     let (Some(root), Some(path)) = (c_str(root), c_str(path)) else {
         return owned(r#"{"ok":false,"error":"null session or request"}"#);
     };
@@ -947,9 +1139,11 @@ pub extern "C" fn pm_custom_import(root: *const c_char, path: *const c_char, kin
     };
     let root = Path::new(&root);
     let result = match kind {
-        0 => crate::shelf::custom::make_wallpaper(root, &bytes, bytes.len() as u32, "image").map(|(_, m)| m),
+        0 => crate::shelf::custom::make_wallpaper(root, &bytes, bytes.len() as u32, "image")
+            .map(|(_, m)| m),
         1 => crate::shelf::custom::import_character_file(root, &bytes, "character"),
-        2 => crate::shelf::custom::import_tamago_file(root, &bytes, "gift").map(|t| crate::shelf::tamago::send_sentence(t.cat).to_string()),
+        2 => crate::shelf::custom::import_tamago_file(root, &bytes, "gift")
+            .map(|t| crate::shelf::tamago::send_sentence(t.cat).to_string()),
         _ => crate::shelf::custom::import_character_zip(root, &bytes),
     };
     match result {
@@ -970,11 +1164,20 @@ pub extern "C" fn pm_set_root(p: *mut Session, root: *const c_char) {
 
 #[no_mangle]
 pub extern "C" fn pm_switch_image(p: *mut Session, rom_path: *const c_char) -> *mut c_char {
-    let Some(s) = session(p) else { return owned(r#"{"ok":false,"error":"null session or request"}"#) };
-    let Some(path) = c_str(rom_path) else { return owned(r#"{"ok":false,"error":"null session or request"}"#) };
+    let Some(s) = session(p) else {
+        return owned(r#"{"ok":false,"error":"null session or request"}"#);
+    };
+    let Some(path) = c_str(rom_path) else {
+        return owned(r#"{"ok":false,"error":"null session or request"}"#);
+    };
     let bytes = match std::fs::read(&path) {
         Ok(b) => b,
-        Err(_) => return owned(json!({"ok": false, "error": copy::text(Lang::En, "import_failed_again")}).to_string()),
+        Err(_) => {
+            return owned(
+                json!({"ok": false, "error": copy::text(Lang::En, "import_failed_again")})
+                    .to_string(),
+            )
+        }
     };
     let saves = if s.save_dir.as_os_str().is_empty() {
         s.root.join("Saves")
@@ -989,7 +1192,9 @@ pub extern "C" fn pm_switch_image(p: *mut Session, rom_path: *const c_char) -> *
 
 #[no_mangle]
 pub extern "C" fn pm_care_foreground(root: *const c_char) -> *mut c_char {
-    let Some(root) = c_str(root) else { return owned(""); };
+    let Some(root) = c_str(root) else {
+        return owned("");
+    };
     let settings_path = Path::new(&root).join("settings");
     let mut s = settings::load_settings(&settings_path);
     let notice = settings::foreground_notice(&mut s).unwrap_or("");

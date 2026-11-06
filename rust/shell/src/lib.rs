@@ -15,6 +15,7 @@ pub mod input;
 pub mod keypatch;
 pub mod library;
 pub mod link;
+pub mod menu_text;
 pub mod mixing;
 pub mod notify;
 pub mod rom;
@@ -23,7 +24,6 @@ pub mod settings;
 pub mod shelf;
 pub mod snapshot_io;
 pub mod textbuf;
-pub mod menu_text;
 pub mod tick;
 pub mod zipimp;
 

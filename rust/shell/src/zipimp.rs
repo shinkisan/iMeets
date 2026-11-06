@@ -27,7 +27,9 @@ pub enum ZipError {
 
 pub fn is_zip(data: &[u8]) -> bool {
     data.len() >= 4
-        && (data.starts_with(b"PK\x03\x04") || data.starts_with(b"PK\x05\x06") || data.starts_with(b"PK\x07\x08"))
+        && (data.starts_with(b"PK\x03\x04")
+            || data.starts_with(b"PK\x05\x06")
+            || data.starts_with(b"PK\x07\x08"))
 }
 
 pub fn list_zip(data: &[u8]) -> Result<Vec<ZipMeta>, ZipError> {
@@ -66,7 +68,15 @@ pub fn list_zip(data: &[u8]) -> Result<Vec<ZipMeta>, ZipError> {
             return Err(ZipError::CannotRead);
         }
         let name = String::from_utf8_lossy(&cd[name_off..name_end]).replace('\\', "/");
-        out.push(ZipMeta { name, method, flags, crc, compressed_size: comp, uncompressed_size: uncomp, local_offset: local });
+        out.push(ZipMeta {
+            name,
+            method,
+            flags,
+            crc,
+            compressed_size: comp,
+            uncompressed_size: uncomp,
+            local_offset: local,
+        });
         i = name_end + extra_len + comment_len;
         if i > cd.len() {
             return Err(ZipError::CannotRead);
@@ -78,7 +88,12 @@ pub fn list_zip(data: &[u8]) -> Result<Vec<ZipMeta>, ZipError> {
     Ok(out)
 }
 
-pub fn check_limits(entries: &[ZipMeta], max_entries: usize, max_bytes: u64, max_bins: Option<usize>) -> Result<(), ZipError> {
+pub fn check_limits(
+    entries: &[ZipMeta],
+    max_entries: usize,
+    max_bytes: u64,
+    max_bins: Option<usize>,
+) -> Result<(), ZipError> {
     if entries.len() > max_entries {
         return Err(ZipError::TooLarge);
     }
@@ -354,17 +369,26 @@ mod tests {
         let refs: Vec<&str> = bins.iter().map(|s| s.as_str()).collect();
         let z = zip_names(&refs, 0);
         let entries = list_zip(&z).unwrap();
-        assert_eq!(check_limits(&entries, ROM_MAX_ENTRIES, ROM_MAX_BYTES, Some(ROM_MAX_BINS)), Err(ZipError::TooLarge));
+        assert_eq!(
+            check_limits(&entries, ROM_MAX_ENTRIES, ROM_MAX_BYTES, Some(ROM_MAX_BINS)),
+            Err(ZipError::TooLarge)
+        );
 
         let many: Vec<String> = (0..4097).map(|i| format!("e{i}.txt")).collect();
         let refs: Vec<&str> = many.iter().map(|s| s.as_str()).collect();
         let z = zip_names(&refs, 0);
         let entries = list_zip(&z).unwrap();
-        assert_eq!(check_limits(&entries, ROM_MAX_ENTRIES, ROM_MAX_BYTES, Some(ROM_MAX_BINS)), Err(ZipError::TooLarge));
+        assert_eq!(
+            check_limits(&entries, ROM_MAX_ENTRIES, ROM_MAX_BYTES, Some(ROM_MAX_BINS)),
+            Err(ZipError::TooLarge)
+        );
 
         let huge = zip_names(&["a.bin"], (128 * 1024 * 1024 + 1) as u32);
         let entries = list_zip(&huge).unwrap();
-        assert_eq!(check_limits(&entries, ROM_MAX_ENTRIES, ROM_MAX_BYTES, Some(32)), Err(ZipError::TooLarge));
+        assert_eq!(
+            check_limits(&entries, ROM_MAX_ENTRIES, ROM_MAX_BYTES, Some(32)),
+            Err(ZipError::TooLarge)
+        );
 
         assert!(skip_rom_junk("__MACOSX/foo.bin"));
         assert!(skip_rom_junk("dir/"));

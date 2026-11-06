@@ -1,5 +1,5 @@
-use std::path::Path;
 use pocket_meets::session::Session;
+use std::path::Path;
 
 fn step(s: &mut Session, seconds: f64) {
     let mut left = seconds;
@@ -57,7 +57,11 @@ fn main() {
         }
         let (menu, buf) = capture(&mut s);
         let keys: String = seq.iter().map(|k| "ABC".chars().nth(*k).unwrap()).collect();
-        println!("{i}\t{keys}\t{}\t{}", menu.replace('\t', " "), buf.replace('\t', " "));
+        println!(
+            "{i}\t{keys}\t{}\t{}",
+            menu.replace('\t', " "),
+            buf.replace('\t', " ")
+        );
         if i % 10 == 9 {
             eprintln!("{}/{}", i + 1, seqs.len());
         }

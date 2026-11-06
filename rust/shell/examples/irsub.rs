@@ -40,8 +40,14 @@ fn shot(s: &mut Session, tag: &str) {
 fn main() {
     let rom = std::env::var("POCKET_MEETS_ROM").expect("POCKET_MEETS_ROM");
     let base = std::env::args().nth(1).expect("save");
-    let hour: f64 = std::env::args().nth(2).map(|v| v.parse().unwrap()).unwrap_or(10.0);
-    let option: usize = std::env::args().nth(3).map(|v| v.parse().unwrap()).unwrap_or(1);
+    let hour: f64 = std::env::args()
+        .nth(2)
+        .map(|v| v.parse().unwrap())
+        .unwrap_or(10.0);
+    let option: usize = std::env::args()
+        .nth(3)
+        .map(|v| v.parse().unwrap())
+        .unwrap_or(1);
     let keys: Vec<usize> = std::env::args()
         .nth(4)
         .unwrap_or_default()

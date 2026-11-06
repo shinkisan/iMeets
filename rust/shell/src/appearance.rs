@@ -29,7 +29,11 @@ pub fn resolve_appearance(appearance: Option<i32>, minimal_ui: Option<bool>) -> 
     if let Some(a) = appearance {
         return if (0..=2).contains(&a) { a } else { 0 };
     }
-    if minimal_ui == Some(true) { 1 } else { 0 }
+    if minimal_ui == Some(true) {
+        1
+    } else {
+        0
+    }
 }
 
 pub fn clamp_scale(v: i32) -> i32 {
@@ -40,7 +44,13 @@ pub fn zone(x: f32, y: f32, w: f32, h: f32, screenshots: bool) -> Option<Zone> {
     if !(w > 0.0 && h > 0.0) || x < 0.0 || y < 0.0 || x >= w || y >= h {
         return None;
     }
-    let col = if x < w / 3.0 { 0 } else if x < 2.0 * w / 3.0 { 1 } else { 2 };
+    let col = if x < w / 3.0 {
+        0
+    } else if x < 2.0 * w / 3.0 {
+        1
+    } else {
+        2
+    };
     let upper = y < h / 3.0;
     Some(match col {
         0 => Zone::A,
@@ -80,8 +90,21 @@ pub fn dot_strength(pixel_points: f32) -> f32 {
     ((pixel_points - 1.0) / 3.0).clamp(0.0, 1.0)
 }
 
-pub fn png_name(y: i32, mo: u32, d: u32, h: u32, mi: u32, s: u32, millis: u32, hex8: &str) -> String {
-    let hex8 = if hex8.len() >= 8 { &hex8[..8] } else { "00000000" };
+pub fn png_name(
+    y: i32,
+    mo: u32,
+    d: u32,
+    h: u32,
+    mi: u32,
+    s: u32,
+    millis: u32,
+    hex8: &str,
+) -> String {
+    let hex8 = if hex8.len() >= 8 {
+        &hex8[..8]
+    } else {
+        "00000000"
+    };
     format!("Open-Meets-{y:04}{mo:02}{d:02}-{h:02}{mi:02}{s:02}-{millis:03}-{hex8}.png")
 }
 
@@ -129,9 +152,18 @@ mod tests {
         assert_eq!(ASLEEP_RGB, 0x292B2A);
         assert_eq!(FLASH_MS, 420);
         assert!((FLASH_BAND - 0.28).abs() < 1e-6);
-        assert_eq!(png_name(2026, 10, 31, 1, 2, 3, 4, "ab"), "Open-Meets-20261031-010203-004-00000000.png");
-        assert_eq!(png_name(2026, 10, 31, 1, 2, 3, 45, "deadbeef00"), "Open-Meets-20261031-010203-045-deadbeef.png");
-        assert_eq!(export_name(2026, 1, 2, 3, 4, 5), "OpenMeets-20260102-030405.t18s");
+        assert_eq!(
+            png_name(2026, 10, 31, 1, 2, 3, 4, "ab"),
+            "Open-Meets-20261031-010203-004-00000000.png"
+        );
+        assert_eq!(
+            png_name(2026, 10, 31, 1, 2, 3, 45, "deadbeef00"),
+            "Open-Meets-20261031-010203-045-deadbeef.png"
+        );
+        assert_eq!(
+            export_name(2026, 1, 2, 3, 4, 5),
+            "OpenMeets-20260102-030405.t18s"
+        );
         assert_eq!(GUIDE_COMPLETE, 2);
         assert_eq!(EXIT_HOLD_MS, 1000);
     }

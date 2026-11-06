@@ -70,8 +70,10 @@ final class AppModel: ObservableObject {
             Task { @MainActor in self?.objectWillChange.send() }
         }
         engine.onFrame = { [weak self] pixels, asleep in
-            self?.pixels = pixels
-            self?.asleep = asleep
+            guard let self else { return }
+            self.pixels = pixels
+            self.asleep = asleep
+            self.pip.noteFrame()
         }
         engine.onNotice = { [weak self] text in
             self?.notice = text
@@ -183,6 +185,7 @@ final class AppModel: ObservableObject {
         switch phase {
         case .active:
             pip.foregrounded()
+            engine.setPipFrames(false)
             focused = true
             let away = backgroundedAt.map { Date().timeIntervalSince($0) } ?? 0
             backgroundedAt = nil
@@ -212,6 +215,9 @@ final class AppModel: ObservableObject {
             focused = false
             cameFromBackground = true
             if backgroundedAt == nil { backgroundedAt = Date() }
+            // Keep copying the LCD. A hidden tick otherwise stops publishing
+            // frames, and the floating window stays on the first one.
+            engine.setPipFrames(pipWanted)
             engine.setVisible(false, interactive: false)
             if pipWanted { pip.backgrounded() }
             _ = engine.saveNow()
@@ -225,12 +231,14 @@ final class AppModel: ObservableObject {
             scheduleRefresh()
         case .inactive:
             focused = false
+            if pipWanted { engine.setPipFrames(true) }
             engine.setVisible(false, interactive: false)
             // Give the PiP layer a live frame before UIKit moves the app to
             // the background; starting PiP from the background is too late.
             if pipWanted { pip.backgrounding() }
         default:
             focused = false
+            engine.setPipFrames(false)
             engine.setVisible(false, interactive: false)
         }
     }
@@ -246,6 +254,7 @@ final class AppModel: ObservableObject {
             pip.startFeeding()
         } else {
             pip.shutdown()
+            engine.setPipFrames(false)
         }
     }
 

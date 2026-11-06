@@ -26,7 +26,14 @@ pub enum AttError {
     FailReceive,
 }
 
-pub fn rx_write(owner: bool, subscribed: bool, prepared: bool, offset: i32, len: usize, queued: usize) -> Result<(), AttError> {
+pub fn rx_write(
+    owner: bool,
+    subscribed: bool,
+    prepared: bool,
+    offset: i32,
+    len: usize,
+    queued: usize,
+) -> Result<(), AttError> {
     if !owner || !subscribed || prepared || offset != 0 || !(1..=20).contains(&len) {
         return Err(AttError::NotPermitted);
     }
@@ -48,7 +55,11 @@ pub fn push_notify(queue_len: usize, payload_len: usize) -> Result<(), AttError>
 
 pub fn cccd_read(owner: bool, offset: i32, subscribed: bool) -> Result<[u8; 2], AttError> {
     if owner && offset == 0 {
-        Ok(if subscribed { CCCD_ENABLE } else { CCCD_DISABLE })
+        Ok(if subscribed {
+            CCCD_ENABLE
+        } else {
+            CCCD_DISABLE
+        })
     } else {
         Err(AttError::NotPermitted)
     }
@@ -68,7 +79,11 @@ pub fn cccd_write(prepared: bool, offset: i32, value: &[u8]) -> Result<bool, Att
 }
 
 pub fn tx_read(owner: bool, offset: i32) -> Result<&'static [u8], AttError> {
-    if owner && offset == 0 { Ok(&[]) } else { Err(AttError::NotPermitted) }
+    if owner && offset == 0 {
+        Ok(&[])
+    } else {
+        Err(AttError::NotPermitted)
+    }
 }
 
 pub fn execute_write() -> AttError {
@@ -82,7 +97,9 @@ pub struct Deadlines {
 
 impl Deadlines {
     pub fn start(now: i64) -> Self {
-        Self { deadline_ms: now + IDLE_TIMEOUT_MS }
+        Self {
+            deadline_ms: now + IDLE_TIMEOUT_MS,
+        }
     }
     pub fn touch(&mut self, now: i64) {
         self.deadline_ms = now + ACTIVE_TIMEOUT_MS;
@@ -113,7 +130,12 @@ pub struct Receive {
 
 impl Receive {
     pub fn new() -> Self {
-        Self { phase: Phase::Preparing, committed: false, grace_deadline: None, success_at: None }
+        Self {
+            phase: Phase::Preparing,
+            committed: false,
+            grace_deadline: None,
+            success_at: None,
+        }
     }
 
     pub fn on_native(&mut self, state: i32, now: i64) {
@@ -152,7 +174,11 @@ impl Receive {
 }
 
 pub fn previous_name_to_store<'a>(current: &'a str) -> Option<&'a str> {
-    if current == BLE_NAME { None } else { Some(current) }
+    if current == BLE_NAME {
+        None
+    } else {
+        Some(current)
+    }
 }
 
 pub fn should_restore(previous: Option<&str>, current: &str) -> bool {
@@ -171,13 +197,34 @@ mod tests {
         assert_eq!(CCCD_UUID, "00002902-0000-1000-8000-00805f9b34fb");
         assert!(rx_write(true, true, false, 0, 1, 0).is_ok());
         assert!(rx_write(true, true, false, 0, 20, 127).is_ok());
-        assert_eq!(rx_write(true, true, false, 0, 0, 0), Err(AttError::NotPermitted));
-        assert_eq!(rx_write(true, true, false, 0, 21, 0), Err(AttError::NotPermitted));
-        assert_eq!(rx_write(false, true, false, 0, 4, 0), Err(AttError::NotPermitted));
-        assert_eq!(rx_write(true, false, false, 0, 4, 0), Err(AttError::NotPermitted));
-        assert_eq!(rx_write(true, true, true, 0, 4, 0), Err(AttError::NotPermitted));
-        assert_eq!(rx_write(true, true, false, 1, 4, 0), Err(AttError::NotPermitted));
-        assert_eq!(rx_write(true, true, false, 0, 4, 128), Err(AttError::FailReceive));
+        assert_eq!(
+            rx_write(true, true, false, 0, 0, 0),
+            Err(AttError::NotPermitted)
+        );
+        assert_eq!(
+            rx_write(true, true, false, 0, 21, 0),
+            Err(AttError::NotPermitted)
+        );
+        assert_eq!(
+            rx_write(false, true, false, 0, 4, 0),
+            Err(AttError::NotPermitted)
+        );
+        assert_eq!(
+            rx_write(true, false, false, 0, 4, 0),
+            Err(AttError::NotPermitted)
+        );
+        assert_eq!(
+            rx_write(true, true, true, 0, 4, 0),
+            Err(AttError::NotPermitted)
+        );
+        assert_eq!(
+            rx_write(true, true, false, 1, 4, 0),
+            Err(AttError::NotPermitted)
+        );
+        assert_eq!(
+            rx_write(true, true, false, 0, 4, 128),
+            Err(AttError::FailReceive)
+        );
         assert_eq!(push_notify(0, 21), Err(AttError::FailReceive));
         assert_eq!(push_notify(512, 1), Err(AttError::FailReceive));
         assert!(push_notify(511, 20).is_ok());

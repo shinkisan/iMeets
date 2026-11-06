@@ -21,7 +21,12 @@ pub fn wallpaper_id(rng: u32) -> u16 {
     50_000 + (rng % 15_000) as u16
 }
 
-pub fn make_wallpaper(root: &Path, image: &[u8], rng: u32, name: &str) -> Result<(String, String), String> {
+pub fn make_wallpaper(
+    root: &Path,
+    image: &[u8],
+    rng: u32,
+    name: &str,
+) -> Result<(String, String), String> {
     let id = wallpaper_id(rng);
     // Slot size is 16384. Most photos will not fit; the body is truncated
     // and the result is only a valid container.
@@ -44,14 +49,16 @@ pub fn import_character_file(root: &Path, bytes: &[u8], name: &str) -> Result<St
 }
 
 pub fn import_character_zip(root: &Path, zip: &[u8]) -> Result<String, String> {
-    let entries = zipimp::list_zip(zip).map_err(|_| copy::text(Lang::En, "cannot_read_zip").to_string())?;
+    let entries =
+        zipimp::list_zip(zip).map_err(|_| copy::text(Lang::En, "cannot_read_zip").to_string())?;
     let mut json_bytes = None;
     let mut files: Vec<(String, Vec<u8>)> = Vec::new();
     for ent in &entries {
         if ent.name.ends_with('/') || zipimp::escapes(&ent.name) {
             continue;
         }
-        let data = zipimp::extract(zip, ent).map_err(|_| copy::text(Lang::En, "cannot_read_zip").to_string())?;
+        let data = zipimp::extract(zip, ent)
+            .map_err(|_| copy::text(Lang::En, "cannot_read_zip").to_string())?;
         if ent.name.rsplit('/').next() == Some("character.json") {
             json_bytes = Some(data);
         } else {
@@ -61,10 +68,17 @@ pub fn import_character_zip(root: &Path, zip: &[u8]) -> Result<String, String> {
     let Some(json_bytes) = json_bytes else {
         return Err(copy::text(Lang::En, "pose_unknown").into());
     };
-    let value: Value = serde_json::from_slice(&json_bytes).map_err(|_| copy::text(Lang::En, "pose_unknown").to_string())?;
+    let value: Value = serde_json::from_slice(&json_bytes)
+        .map_err(|_| copy::text(Lang::En, "pose_unknown").to_string())?;
     let blob_name = value.get("blob").and_then(|v| v.as_str()).unwrap_or("");
-    let name = value.get("name").and_then(|v| v.as_str()).unwrap_or("character");
-    let blob = files.iter().find(|(n, _)| n == blob_name || n.ends_with(blob_name)).map(|(_, b)| b.clone());
+    let name = value
+        .get("name")
+        .and_then(|v| v.as_str())
+        .unwrap_or("character");
+    let blob = files
+        .iter()
+        .find(|(n, _)| n == blob_name || n.ends_with(blob_name))
+        .map(|(_, b)| b.clone());
     let Some(blob) = blob else {
         return Err(copy::text(Lang::En, "pose_unknown").into());
     };
@@ -81,7 +95,8 @@ pub fn import_character_zip(root: &Path, zip: &[u8]) -> Result<String, String> {
             fs::write(dir.join(format!("{id}-{base}")), data).map_err(|e| e.to_string())?;
         }
     }
-    let side = json!({"custom": true, "kind": "character", "name": name, "path": format!("{id}.bin")});
+    let side =
+        json!({"custom": true, "kind": "character", "name": name, "path": format!("{id}.bin")});
     fs::write(dir.join(format!("{id}.json")), side.to_string()).map_err(|e| e.to_string())?;
     Ok(copy::text(Lang::En, "chest_sentence").into())
 }
@@ -92,7 +107,12 @@ pub fn import_tamago_file(root: &Path, bytes: &[u8], name: &str) -> Result<tamag
     Ok(t)
 }
 
-fn store_import(root: &Path, bytes: &[u8], kind: &str, name: &str) -> Result<(String, String), String> {
+fn store_import(
+    root: &Path,
+    bytes: &[u8],
+    kind: &str,
+    name: &str,
+) -> Result<(String, String), String> {
     let dir = root.join("TamaShelf/imports");
     fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     let id = fresh_id();
@@ -109,11 +129,21 @@ fn store_import(root: &Path, bytes: &[u8], kind: &str, name: &str) -> Result<(St
 }
 
 fn fresh_id() -> String {
-    let n = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or(0);
+    let n = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or(0);
     format!("{n:x}")
 }
 
-pub fn character_prefs(parts: [u8; 4], colors: &[u8], sex: u8, mode: u8, original: bool, name: &str) -> String {
+pub fn character_prefs(
+    parts: [u8; 4],
+    colors: &[u8],
+    sex: u8,
+    mode: u8,
+    original: bool,
+    name: &str,
+) -> String {
     json!({
         "parts": parts,
         "colors": colors,
@@ -139,10 +169,17 @@ mod tests {
         let root = crate::tmpdir("custom");
         let (_id, msg) = make_wallpaper(&root, b"not-a-real-photo", 10, "pic").unwrap();
         assert!(msg.contains("pixel encoding is unknown"));
-        let bin = fs::read_dir(root.join("TamaShelf/imports")).unwrap().find_map(|e| {
-            let p = e.ok()?.path();
-            if p.extension().map(|x| x == "bin").unwrap_or(false) { Some(p) } else { None }
-        }).unwrap();
+        let bin = fs::read_dir(root.join("TamaShelf/imports"))
+            .unwrap()
+            .find_map(|e| {
+                let p = e.ok()?.path();
+                if p.extension().map(|x| x == "bin").unwrap_or(false) {
+                    Some(p)
+                } else {
+                    None
+                }
+            })
+            .unwrap();
         let parsed = tamago::parse(&fs::read(&bin).unwrap()).unwrap();
         assert_eq!(parsed.cat, Cat::Wallpaper);
         assert_eq!(parsed.id, 50_010);
@@ -152,7 +189,11 @@ mod tests {
         import_character_file(&root, &blob, "ori").unwrap();
 
         let side = br#"{"name":"zip","blob":"c.bin"}"#;
-        let zip = zipimp::zip_stored(&[("character.json", side), ("c.bin", blob.as_slice()), ("pose.png", b"\x89PNG")]);
+        let zip = zipimp::zip_stored(&[
+            ("character.json", side),
+            ("c.bin", blob.as_slice()),
+            ("pose.png", b"\x89PNG"),
+        ]);
         import_character_zip(&root, &zip).unwrap();
         let png_only = zipimp::zip_stored(&[("pose.png", b"\x89PNG")]);
         let err = import_character_zip(&root, &png_only).unwrap_err();

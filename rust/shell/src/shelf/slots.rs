@@ -21,13 +21,48 @@ pub struct Table {
 
 pub fn table(cat: Cat) -> Table {
     match cat {
-        Cat::Meal => Table { base: 6_356_992, count: 20, size: 2048, occ0: None },
-        Cat::Snack => Table { base: 6_422_528, count: 20, size: 2048, occ0: None },
-        Cat::Accessory => Table { base: 6_553_600, count: 16, size: 8192, occ0: Some(37) },
-        Cat::Item => Table { base: 6_823_936, count: 23, size: 8192, occ0: Some(54) },
-        Cat::Wallpaper => Table { base: 7_208_960, count: 8, size: 16384, occ0: None },
-        Cat::Game => Table { base: 7_340_032, count: 2, size: 32768, occ0: None },
-        Cat::Station => Table { base: 7_405_568, count: 2, size: 65536, occ0: None },
+        Cat::Meal => Table {
+            base: 6_356_992,
+            count: 20,
+            size: 2048,
+            occ0: None,
+        },
+        Cat::Snack => Table {
+            base: 6_422_528,
+            count: 20,
+            size: 2048,
+            occ0: None,
+        },
+        Cat::Accessory => Table {
+            base: 6_553_600,
+            count: 16,
+            size: 8192,
+            occ0: Some(37),
+        },
+        Cat::Item => Table {
+            base: 6_823_936,
+            count: 23,
+            size: 8192,
+            occ0: Some(54),
+        },
+        Cat::Wallpaper => Table {
+            base: 7_208_960,
+            count: 8,
+            size: 16384,
+            occ0: None,
+        },
+        Cat::Game => Table {
+            base: 7_340_032,
+            count: 2,
+            size: 32768,
+            occ0: None,
+        },
+        Cat::Station => Table {
+            base: 7_405_568,
+            count: 2,
+            size: 65536,
+            occ0: None,
+        },
     }
 }
 
@@ -55,7 +90,12 @@ fn bits_clear(sram: &[u8], parameter: u32, abs_index: u32) -> bool {
     (sram[i] >> shift) & 0b11 == 0
 }
 
-pub fn place(ram: &[u8], sram: &[u8], resource: &Tamago, parameter: Option<u32>) -> Result<(usize, Vec<MemWrite>), String> {
+pub fn place(
+    ram: &[u8],
+    sram: &[u8],
+    resource: &Tamago,
+    parameter: Option<u32>,
+) -> Result<(usize, Vec<MemWrite>), String> {
     let table = table(resource.cat);
     if resource.bytes.len() > table.size {
         return Err("resource is larger than the slot".into());
@@ -94,7 +134,10 @@ pub fn place(ram: &[u8], sram: &[u8], resource: &Tamago, parameter: Option<u32>)
     let off = table.base + slot * table.size;
     let mut cell = vec![0xFF; table.size];
     cell[..prepared.bytes.len()].copy_from_slice(&prepared.bytes);
-    let mut writes = vec![MemWrite { address: RAM_BASE + off as u32, bytes: cell }];
+    let mut writes = vec![MemWrite {
+        address: RAM_BASE + off as u32,
+        bytes: cell,
+    }];
     if let Some(base) = table.occ0 {
         let abs = base + slot as u32;
         let i = occ_byte_index(parameter.unwrap(), abs);
@@ -105,7 +148,10 @@ pub fn place(ram: &[u8], sram: &[u8], resource: &Tamago, parameter: Option<u32>)
         });
     }
     if resource.cat.needs_extra_ff() {
-        writes.push(MemWrite { address: EXTRA_FF, bytes: vec![0xFF; EXTRA_FF_LEN] });
+        writes.push(MemWrite {
+            address: EXTRA_FF,
+            bytes: vec![0xFF; EXTRA_FF_LEN],
+        });
     }
     Ok((slot, writes))
 }
@@ -162,9 +208,13 @@ mod tests {
 
         let acc = build(-2_130_562_048, 3, 0, 516, &[]);
         let a = tamago::parse(&acc).unwrap();
-        assert!(place(&ram, &sram, &a, None).unwrap_err().contains("shelf signatures"));
+        assert!(place(&ram, &sram, &a, None)
+            .unwrap_err()
+            .contains("shelf signatures"));
         let (_slot, writes) = place(&vec![0xFF; 8_388_608], &sram, &a, Some(0)).unwrap();
-        assert!(writes.iter().any(|w| w.address == SRAM_BASE + (83 + 37 / 4) as u32));
+        assert!(writes
+            .iter()
+            .any(|w| w.address == SRAM_BASE + (83 + 37 / 4) as u32));
         assert_eq!(set_occ_bits(0, 37), 1 << ((37 % 4) * 2));
         assert_eq!(set_occ_bits(0xFF, 0) & 0b11, 0b01);
 
@@ -172,9 +222,15 @@ mod tests {
         assert_eq!(balance_word(99_990, true, 20).unwrap(), 99_999);
         assert_eq!(balance_word(1, false, 0).unwrap(), 0);
         assert_eq!(balance_word(1, false, 99_999).unwrap(), 99_999);
-        assert_eq!(balance_word(100_000, false, 1), Err("balance must be 0–99999"));
+        assert_eq!(
+            balance_word(100_000, false, 1),
+            Err("balance must be 0–99999")
+        );
         assert_eq!(balance_word(1, false, -1), Err("balance must be 0–99999"));
-        assert_eq!(balance_word(1, true, 100_000), Err("balance must be 0–99999"));
+        assert_eq!(
+            balance_word(1, true, 100_000),
+            Err("balance must be 0–99999")
+        );
         assert_eq!(table(Cat::Meal).base, 6_356_992);
         assert_eq!(table(Cat::Snack).base, 6_422_528);
         assert_ne!(table(Cat::Meal).base, table(Cat::Snack).base);

@@ -97,7 +97,10 @@ fn main() {
         if let Some(px) = profile(&mut s) {
             let h = region_hash(&px);
             if h != baseline {
-                println!("offset {off:05X}: {old:02X} -> {:02X}, hash {h:016X}", old ^ 0xFF);
+                println!(
+                    "offset {off:05X}: {old:02X} -> {:02X}, hash {h:016X}",
+                    old ^ 0xFF
+                );
                 let mut rgb = Vec::with_capacity(16_384 * 3);
                 for p in &px {
                     rgb.push(((p >> 16) & 0xff) as u8);

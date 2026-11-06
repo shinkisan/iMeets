@@ -28,16 +28,24 @@ final class PiPController: NSObject {
     var frameProvider: (() -> (pixels: [UInt32], asleep: Bool))?
 
     private var controller: AVPictureInPictureController?
-    private var timer: Timer?
+    private var feed: DispatchSourceTimer?
     private let audio = SilentAudio()
     private let cell = 3
     private let lcd = 128
+    private let frameScale: CMTimeScale = 30
+    private var timebase: CMTimebase?
+    private var lastPts = CMTime.zero
+    private var pool: CVPixelBufferPool?
+    private var inBackground = false
+    private var reportedFailure = false
     private(set) var isFeeding = false
 
     override init() {
         super.init()
         hostView.isUserInteractionEnabled = false
+        hostView.frame = CGRect(x: 0, y: 0, width: 384, height: 384)
         hostView.displayLayer.videoGravity = .resizeAspect
+        hostView.displayLayer.frame = hostView.bounds
         makeTimebase()
         makeController()
     }
@@ -52,8 +60,11 @@ final class PiPController: NSObject {
             timebaseOut: &created
         )
         guard let created else { return }
-        CMTimebaseSetTime(created, time: CMClockGetTime(CMClockGetHostTimeClock()))
+        let now = CMClockGetTime(CMClockGetHostTimeClock())
+        CMTimebaseSetTime(created, time: now)
         CMTimebaseSetRate(created, rate: 1)
+        lastPts = now
+        timebase = created
         hostView.displayLayer.controlTimebase = created
     }
 
@@ -67,6 +78,7 @@ final class PiPController: NSObject {
         )
         let controller = AVPictureInPictureController(contentSource: source)
         controller.delegate = self
+        controller.requiresLinearPlayback = true
         controller.canStartPictureInPictureAutomaticallyFromInline = true
         self.controller = controller
     }
@@ -82,19 +94,24 @@ final class PiPController: NSObject {
         audio.start()
         controller?.canStartPictureInPictureAutomaticallyFromInline = true
         render()
-        let timer = Timer(timeInterval: 0.1, repeats: true) { [weak self] _ in
-            self?.render()
-        }
-        RunLoop.main.add(timer, forMode: .common)
-        self.timer = timer
+        // Heartbeat for a still LCD, and for a renderer that failed after
+        // backgrounding. Picture changes are pushed as soon as they happen.
+        let feed = DispatchSource.makeTimerSource(queue: .main)
+        feed.schedule(deadline: .now() + .milliseconds(100), repeating: .milliseconds(100), leeway: .milliseconds(20))
+        feed.setEventHandler { [weak self] in self?.render() }
+        feed.resume()
+        self.feed = feed
     }
 
     /// Resigning active: start the keep-alive audio and let iOS move the layer
     /// into PiP as the app backgrounds.
     func backgrounding() {
         guard controller != nil else { return }
+        inBackground = true
         startFeeding()
+        ensureTimebaseRunning()
         controller?.canStartPictureInPictureAutomaticallyFromInline = true
+        render()
         // Starting while the app is still in the foreground half of the
         // transition is the only reliable manual call.
         if controller?.isPictureInPicturePossible == true,
@@ -112,9 +129,17 @@ final class PiPController: NSObject {
     }
 
     func foregrounded() {
+        inBackground = false
         if controller?.isPictureInPictureActive == true {
             controller?.stopPictureInPicture()
         }
+    }
+
+    /// A new LCD frame arrived. In the background this is what moves the
+    /// floating window; the timer only covers a still screen and a stalled layer.
+    func noteFrame() {
+        guard isFeeding, inBackground else { return }
+        render()
     }
 
     /// The setting was turned off: stop PiP, the feed and the audio session.
@@ -124,30 +149,92 @@ final class PiPController: NSObject {
         controller?.canStartPictureInPictureAutomaticallyFromInline = false
         guard isFeeding else { return }
         isFeeding = false
-        timer?.invalidate()
-        timer = nil
+        feed?.cancel()
+        feed = nil
     }
 
     private func render() {
+        guard isFeeding else { return }
+        prepareRenderer()
         guard let frame = frameProvider?() else { return }
         guard let sample = makeSample(pixels: frame.pixels, asleep: frame.asleep) else { return }
-        hostView.displayLayer.enqueue(sample)
+        push(sample)
+    }
+
+    /// PiP follows the control timebase. `DisplayImmediately` fights that
+    /// clock: the system window keeps the first scheduled image and drops
+    /// every later buffer. Each frame is one step ahead of the clock instead.
+    private func presentationTime() -> CMTime {
+        let step = CMTime(value: 1, timescale: frameScale)
+        let now = timebase.map { CMTimebaseGetTime($0) } ?? CMClockGetTime(CMClockGetHostTimeClock())
+        var pts = CMTimeAdd(now, step)
+        if CMTimeCompare(pts, lastPts) <= 0 {
+            pts = CMTimeAdd(lastPts, CMTime(value: 1, timescale: 600))
+        }
+        lastPts = pts
+        return pts
+    }
+
+    private func ensureTimebaseRunning() {
+        guard let timebase else { return }
+        if CMTimebaseGetRate(timebase) == 0 {
+            CMTimebaseSetRate(timebase, rate: 1)
+        }
+    }
+
+    private func anchorTimebase() {
+        guard let timebase else { return }
+        let now = CMClockGetTime(CMClockGetHostTimeClock())
+        CMTimebaseSetTime(timebase, time: now)
+        CMTimebaseSetRate(timebase, rate: 1)
+        lastPts = now
+    }
+
+    private func prepareRenderer() {
+        if #available(iOS 17.0, *) {
+            let renderer = hostView.displayLayer.sampleBufferRenderer
+            recover(failed: renderer.status == .failed, needsFlush: renderer.requiresFlushToResumeDecoding, error: renderer.error) {
+                renderer.flush()
+            }
+        } else {
+            let layer = hostView.displayLayer
+            recover(failed: layer.status == .failed, needsFlush: layer.requiresFlushToResumeDecoding, error: layer.error) {
+                layer.flush()
+            }
+        }
+        ensureTimebaseRunning()
+    }
+
+    private func push(_ sample: CMSampleBuffer) {
+        if #available(iOS 17.0, *) {
+            let renderer = hostView.displayLayer.sampleBufferRenderer
+            guard renderer.isReadyForMoreMediaData else { return }
+            renderer.enqueue(sample)
+        } else {
+            let layer = hostView.displayLayer
+            guard layer.isReadyForMoreMediaData else { return }
+            layer.enqueue(sample)
+        }
+    }
+
+    /// Backgrounding marks the renderer failed until it is flushed. Further
+    /// enqueues are ignored, so the PiP window stays on the frame it opened with.
+    private func recover(failed: Bool, needsFlush: Bool, error: Error?, flush: () -> Void) {
+        guard failed || needsFlush else {
+            reportedFailure = false
+            return
+        }
+        if !reportedFailure, let error {
+            print("PM-PIP layer failed \(error)")
+            reportedFailure = true
+        }
+        flush()
+        anchorTimebase()
     }
 
     private func makeSample(pixels: [UInt32], asleep: Bool) -> CMSampleBuffer? {
         let side = lcd * cell
-        let attributes: [CFString: Any] = [
-            kCVPixelBufferIOSurfacePropertiesKey: [:],
-            kCVPixelBufferPixelFormatTypeKey: kCVPixelFormatType_32BGRA,
-        ]
-        var buffer: CVPixelBuffer?
-        CVPixelBufferCreate(
-            kCFAllocatorDefault, side, side,
-            kCVPixelFormatType_32BGRA,
-            attributes as CFDictionary,
-            &buffer
-        )
-        guard let buffer else { return nil }
+        guard let buffer = pixelBuffer() else { return nil }
 
         CVPixelBufferLockBaseAddress(buffer, [])
         if let base = CVPixelBufferGetBaseAddress(buffer) {
@@ -206,8 +293,8 @@ final class PiPController: NSObject {
         guard let format else { return nil }
 
         var timing = CMSampleTimingInfo(
-            duration: CMTime(value: 1, timescale: 10),
-            presentationTimeStamp: CMClockGetTime(CMClockGetHostTimeClock()),
+            duration: CMTime(value: 1, timescale: frameScale),
+            presentationTimeStamp: presentationTime(),
             decodeTimeStamp: .invalid
         )
         var sample: CMSampleBuffer?
@@ -218,24 +305,53 @@ final class PiPController: NSObject {
             sampleTiming: &timing,
             sampleBufferOut: &sample
         )
-        guard let sample else { return nil }
-        if let attachments = CMSampleBufferGetSampleAttachmentsArray(sample, createIfNecessary: true) {
-            let dictionary = unsafeBitCast(
-                CFArrayGetValueAtIndex(attachments, 0),
-                to: CFMutableDictionary.self
-            )
-            CFDictionarySetValue(
-                dictionary,
-                Unmanaged.passUnretained(kCMSampleAttachmentKey_DisplayImmediately).toOpaque(),
-                Unmanaged.passUnretained(kCFBooleanTrue).toOpaque()
-            )
-        }
         return sample
+    }
+
+    /// IOSurface-backed buffers are what the PiP process can read. A pool
+    /// keeps a buffer the window still holds from being overwritten.
+    private func pixelBuffer() -> CVPixelBuffer? {
+        let side = lcd * cell
+        if pool == nil {
+            let attrs: [CFString: Any] = [
+                kCVPixelBufferPixelFormatTypeKey: kCVPixelFormatType_32BGRA,
+                kCVPixelBufferWidthKey: side,
+                kCVPixelBufferHeightKey: side,
+                kCVPixelBufferIOSurfacePropertiesKey: [:] as [String: Any],
+                kCVPixelBufferMetalCompatibilityKey: true,
+                kCVPixelBufferCGImageCompatibilityKey: true,
+                kCVPixelBufferCGBitmapContextCompatibilityKey: true,
+            ]
+            let poolAttrs: [CFString: Any] = [
+                kCVPixelBufferPoolMinimumBufferCountKey: 4,
+            ]
+            var created: CVPixelBufferPool?
+            CVPixelBufferPoolCreate(
+                kCFAllocatorDefault,
+                poolAttrs as CFDictionary,
+                attrs as CFDictionary,
+                &created
+            )
+            pool = created
+        }
+        guard let pool else { return nil }
+        var buffer: CVPixelBuffer?
+        let status = CVPixelBufferPoolCreatePixelBuffer(kCFAllocatorDefault, pool, &buffer)
+        guard status == kCVReturnSuccess else { return nil }
+        return buffer
     }
 }
 
 extension PiPController: AVPictureInPictureControllerDelegate {
-    func pictureInPictureControllerDidStartPictureInPicture(_ controller: AVPictureInPictureController) {}
+    func pictureInPictureControllerWillStartPictureInPicture(_ controller: AVPictureInPictureController) {
+        ensureTimebaseRunning()
+        render()
+    }
+
+    func pictureInPictureControllerDidStartPictureInPicture(_ controller: AVPictureInPictureController) {
+        ensureTimebaseRunning()
+        render()
+    }
 
     func pictureInPictureControllerDidStopPictureInPicture(_ controller: AVPictureInPictureController) {}
 }
@@ -244,7 +360,10 @@ extension PiPController: AVPictureInPictureSampleBufferPlaybackDelegate {
     func pictureInPictureController(
         _ controller: AVPictureInPictureController,
         setPlaying playing: Bool
-    ) {}
+    ) {
+        // A rate of 0 leaves the window on the frame it opened with.
+        if playing { ensureTimebaseRunning() }
+    }
 
     func pictureInPictureControllerTimeRangeForPlayback(
         _ controller: AVPictureInPictureController

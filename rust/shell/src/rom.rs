@@ -8,7 +8,11 @@ pub const ROM_BYTES: usize = 8_388_608;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ImageClass {
-    Supported { version: u32, stem: String, title: String },
+    Supported {
+        version: u32,
+        stem: String,
+        title: String,
+    },
     NotImage,
     Unsupported,
 }
@@ -18,7 +22,11 @@ pub fn classify(data: &[u8]) -> ImageClass {
         return ImageClass::NotImage;
     }
     match tg18::roms::identify(data) {
-        Some(k) => ImageClass::Supported { version: k.version, stem: k.stem(), title: k.display_name() },
+        Some(k) => ImageClass::Supported {
+            version: k.version,
+            stem: k.stem(),
+            title: k.display_name(),
+        },
         None => ImageClass::Unsupported,
     }
 }
@@ -86,7 +94,10 @@ mod tests {
     #[test]
     fn bad_images_and_early_reject() {
         assert!(matches!(classify(b"short"), ImageClass::NotImage));
-        assert_eq!(native_error(&ImageClass::NotImage), Some("Expected an 8 MiB Meets/On SPI flash dump."));
+        assert_eq!(
+            native_error(&ImageClass::NotImage),
+            Some("Expected an 8 MiB Meets/On SPI flash dump.")
+        );
         let big = vec![0u8; ROM_BYTES];
         assert!(matches!(classify(&big), ImageClass::Unsupported));
         assert_eq!(
@@ -94,11 +105,25 @@ mod tests {
             Some("This firmware version is not supported by tg18-emu yet.")
         );
         assert_eq!(user_error(), "choose a supported Meets / On ROM.");
-        let mut over = Zeros { left: ROM_BYTES + 5_000_000, served: 0, panic_after: ROM_BYTES + 64 * 1024 };
-        assert!(matches!(read_candidate(&mut over), Err(ImageClass::NotImage)));
+        let mut over = Zeros {
+            left: ROM_BYTES + 5_000_000,
+            served: 0,
+            panic_after: ROM_BYTES + 64 * 1024,
+        };
+        assert!(matches!(
+            read_candidate(&mut over),
+            Err(ImageClass::NotImage)
+        ));
         assert!(over.served <= ROM_BYTES + 64 * 1024);
-        let mut short = Zeros { left: 10, served: 0, panic_after: 100 };
-        assert!(matches!(read_candidate(&mut short), Err(ImageClass::NotImage)));
+        let mut short = Zeros {
+            left: 10,
+            served: 0,
+            panic_after: 100,
+        };
+        assert!(matches!(
+            read_candidate(&mut short),
+            Err(ImageClass::NotImage)
+        ));
     }
 
     #[test]

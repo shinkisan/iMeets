@@ -42,7 +42,9 @@ fn byte(m: &Machine, addr: u32) -> Option<u8> {
 
 /// True when every scanner site holds the instruction this patch knows.
 pub fn recognized(m: &Machine) -> bool {
-    SITES.iter().all(|&(addr, want, _)| byte(m, addr) == Some(want))
+    SITES
+        .iter()
+        .all(|&(addr, want, _)| byte(m, addr) == Some(want))
 }
 
 /// True when the patch is in place (either just applied or already there).

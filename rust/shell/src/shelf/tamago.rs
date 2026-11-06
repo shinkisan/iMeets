@@ -59,7 +59,9 @@ pub fn checksum(data: &[u8]) -> u16 {
     if data.len() < 2 {
         return 0;
     }
-    let sum = data[..data.len() - 2].iter().fold(0u32, |a, b| a.wrapping_add(*b as u32));
+    let sum = data[..data.len() - 2]
+        .iter()
+        .fold(0u32, |a, b| a.wrapping_add(*b as u32));
     (sum & 0xFFFF) as u16
 }
 
@@ -108,7 +110,14 @@ pub fn parse(data: &[u8]) -> Result<Tamago, String> {
     }
     let id = u16::from_be_bytes(data[90..92].try_into().unwrap());
     let price = u16::from_be_bytes(data[118..120].try_into().unwrap());
-    Ok(Tamago { bytes: data.to_vec(), kind, normalized, cat, id, price })
+    Ok(Tamago {
+        bytes: data.to_vec(),
+        kind,
+        normalized,
+        cat,
+        id,
+        price,
+    })
 }
 
 /// Rewrite the normalized kind and the checksum. Other bytes stay.
@@ -120,7 +129,11 @@ pub fn prepare(mut t: Tamago) -> Tamago {
 }
 
 pub fn send_sentence(cat: Cat) -> &'static str {
-    let key = if matches!(cat, Cat::Meal | Cat::Snack) { "food_sentence" } else { "chest_sentence" };
+    let key = if matches!(cat, Cat::Meal | Cat::Snack) {
+        "food_sentence"
+    } else {
+        "chest_sentence"
+    };
     copy::text(Lang::En, key)
 }
 
@@ -138,7 +151,10 @@ pub fn build(cat_kind: i32, id: u16, price: u16, len: usize, body: &[u8]) -> Vec
     let len = len.max(MIN_LEN);
     let mut data = vec![0u8; len];
     data[..6].copy_from_slice(b"TAMAGO");
-    let declared = if normalize(cat_kind).map(|(_, c)| c == Cat::Station).unwrap_or(false) {
+    let declared = if normalize(cat_kind)
+        .map(|(_, c)| c == Cat::Station)
+        .unwrap_or(false)
+    {
         (len as u32).saturating_sub(2)
     } else {
         len as u32
@@ -170,7 +186,10 @@ mod tests {
         assert_eq!(t.price, 50);
         assert!(t.bytes[120..126].starts_with(b"pixels"));
         let placed = prepare(t);
-        assert_eq!(i32::from_be_bytes(placed.bytes[78..82].try_into().unwrap()), placed.normalized);
+        assert_eq!(
+            i32::from_be_bytes(placed.bytes[78..82].try_into().unwrap()),
+            placed.normalized
+        );
         assert!(parse(&placed.bytes).is_ok());
 
         let mut bad = raw.clone();
@@ -193,9 +212,18 @@ mod tests {
         write_checksum(&mut wrong);
         assert!(parse(&wrong).is_err());
 
-        assert_eq!(send_sentence(Cat::Snack), "sent to the restaurant menu to be bought");
-        assert_eq!(send_sentence(Cat::Wallpaper), "sent to your chest to use or wear");
-        assert_eq!(send_sentence(Cat::Game), "sent to your chest to use or wear");
+        assert_eq!(
+            send_sentence(Cat::Snack),
+            "sent to the restaurant menu to be bought"
+        );
+        assert_eq!(
+            send_sentence(Cat::Wallpaper),
+            "sent to your chest to use or wear"
+        );
+        assert_eq!(
+            send_sentence(Cat::Game),
+            "sent to your chest to use or wear"
+        );
         assert_eq!(preview_len(Cat::Accessory), Some(1478));
         assert_eq!(preview_len(Cat::Item), Some(516));
         assert_eq!(preview_len(Cat::Game), None);
