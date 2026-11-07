@@ -10,7 +10,7 @@ struct LibraryView: View {
             Section {
                 if model.library.isEmpty {
                     Text(model.t("no_rom_imported"))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(.black)
                 }
                 ForEach(model.library, id: \.self) { stem in
                     Button {
@@ -20,14 +20,23 @@ struct LibraryView: View {
                         model.notice = message
                         model.reload()
                     } label: {
-                        Label(stem, systemImage: "externaldrive")
-                            .foregroundStyle(.primary)
+                        Label {
+                            Text(stem)
+                                .foregroundStyle(.black)
+                        } icon: {
+                            Image(systemName: "externaldrive")
+                        }
                     }
                 }
             }
             Section {
                 Button { picking = true } label: {
-                    Label(model.t("choose_rom"), systemImage: "doc.badge.plus")
+                    Label {
+                        Text(model.t("choose_rom"))
+                            .foregroundStyle(.black)
+                    } icon: {
+                        Image(systemName: "doc.badge.plus")
+                    }
                 }
             }
         }

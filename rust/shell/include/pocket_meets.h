@@ -28,8 +28,8 @@
 #define PM_TICK_HIDDEN_MS 100u
 #define PM_BLE_NAME "TMGC_meets"
 #define PM_MIXING_VERSION "1.4.3"
-#define PM_RELEASE "1.0.1"
-#define PM_BUILD 10018
+#define PM_RELEASE "1.1"
+#define PM_BUILD 10019
 #define PM_GATT_IDLE_MS 300000
 #define PM_GATT_ACTIVE_MS 120000
 #define PM_GATT_GRACE_MS 2500

@@ -1,8 +1,8 @@
 //! Product strings. The notes the person reads are 1.0.1. Mixing still
 //! sends 1.4.3 because that is the client version the server saw.
 
-pub const RELEASE: &str = "1.0.1";
-pub const BUILD: i32 = 10018;
+pub const RELEASE: &str = "1.1";
+pub const BUILD: i32 = 10019;
 pub const MIXING_VERSION: &str = "1.4.3";
 pub const CORE_VERSION: &str = "1.0.0";
 pub const MIXING_APP_ID: &str = "com.bandai.tamagotchion";
@@ -48,13 +48,13 @@ mod tests {
 
     #[test]
     fn identity_and_nine_hash_stems() {
-        assert_eq!(RELEASE, "1.0.1");
-        assert_eq!(BUILD, 10018);
+        assert_eq!(RELEASE, "1.1");
+        assert_eq!(BUILD, 10019);
         assert_eq!(MIXING_VERSION, "1.4.3");
         assert_ne!(MIXING_VERSION, RELEASE);
         assert!(should_show_notes(0));
-        assert!(should_show_notes(10017));
-        assert!(!should_show_notes(10018));
+        assert!(should_show_notes(10018));
+        assert!(!should_show_notes(10019));
         assert!(!MIXING_URL.contains("/api_en"));
         assert!(MIXING_URL.contains("com.daiban.tamagotchionapi_en/meets.php"));
         assert_eq!(ALBUM, "Pocket Meets");

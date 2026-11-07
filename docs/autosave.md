@@ -16,20 +16,22 @@
 | 补时（离开较久回来） | `pump` 的 catch-up 分支，`tick::CATCHUP_SAVE_MS = 10_000` | 补时过程中每 10 秒存一次，补完后再存一次 |
 | 切到后台 | `AppModel.scene(.background)` → `engine.saveNow()` | 进入后台时立即存，不依赖后台是否还在跑 |
 | 设置 → 立即保存 | `SettingsView` → `engine.saveNow()` | 手动，始终写入 |
+| 暂停养育 | `Session::care_pause`（设置开启“暂停养育”） | 开启暂停时立即存一次，锁定进入暂停前的最新状态 |
+| 联机前（面对面） | `LanLink.begin()` → `engine.saveNow()` | 局域网连接建立、准备通信前立即存一次 |
+| 联机前（WebMeets / Mixing） | `AppModel.onRoute` → `engine.saveNow()` | 固件进入联机路由、跳转页面前立即存一次 |
 | 切换 ROM | `session.switch_to_image` 先 `save()` | 切换前存当前进度，各 ROM 分别保留 |
 | 连接结束（WebMeets 收礼/发送） | `WebMeetsView` 的 `saveNow()` | 连接成功完成后存 |
 | 导入 / 删除存档 | `pm_import_save` / `pm_delete_current_save` | 导入覆盖当前存档前后各有写入，删除会清空 |
 
 ## 不会存档的情况
 
-- **暂停养育**：`pump` 在 `care.paused` 时直接返回，30 秒自动存档和补时存档都不跑。手动保存、切后台保存仍然写入。
+- **暂停养育**：`pump` 在 `care.paused` 时直接返回，30 秒自动存档和补时存档都不跑。但开启暂停的瞬间会立即自动存一次；暂停期间手动保存、切后台保存仍然写入。
 - **运行停止**（`stopped`，ROM 不可运行或蓝牙连接失败）：`save()` 直接返回错误，保护“上一次好存档”，导出时改用 `autosave.t18s`。
 - **App 被系统挂起**：后台能否继续 pump 取决于 `UIBackgroundModes`（当前有 `bluetooth-peripheral`、`audio`）。没有保活时，依赖“切后台那一次存档”。
 
 ## 已知缺口
 
 1. `Engine.closeSession()` 会 `pm_save`，但 Swift 侧没有调用，退出 App 时不会额外存一次。
-2. 面对面（LAN）联机没有专门的存档点，只靠 30 秒自动存档。
 
 ## 后台任务
 

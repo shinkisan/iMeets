@@ -7,6 +7,7 @@ struct ToyView: View {
     @Environment(\.colorScheme) private var colorScheme
     @State private var exitStart: Date?
     @State private var confirmLanDisconnect = false
+    @State private var confirmResumeForLan = false
     @State private var showToolbarEditor = false
     @State private var downKeys: Set<Int> = []
     @State private var flashActive = false
@@ -15,6 +16,7 @@ struct ToyView: View {
     @State private var glyphSource = false
     @State private var fontMatchable: Bool?
     @AppStorage("pm.playerName") private var playerName = ""
+    @AppStorage("pm.pip") private var pipEnabled = false
     /// Latest More-menu actions. The menu view itself does not redraw with
     /// the LCD, so taps read this object instead of a closure frozen earlier.
     @State private var moreRelay = ToyMoreRelay()
@@ -67,6 +69,22 @@ struct ToyView: View {
         .alert("断开连接？", isPresented: $confirmLanDisconnect) {
             Button("断开", role: .destructive) { model.lan.stop() }
             Button("取消", role: .cancel) {}
+        }
+        .alert(
+            english ? "Resume Care to Connect?" : "联机需要恢复养育",
+            isPresented: $confirmResumeForLan
+        ) {
+            Button(english ? "Resume & Connect" : "恢复并联机") {
+                model.setPaused(false)
+                model.showLan = true
+            }
+            Button(english ? "Cancel" : "取消", role: .cancel) {}
+        } message: {
+            Text(
+                english
+                    ? "Care is currently paused. Multiplayer connection requires resuming the pet. Continue?"
+                    : "当前养育已处于暂停状态。联机通信需要先恢复宠物运行，是否继续？"
+            )
         }
         .background(KeyCatcher { name, down in
             guard let index = keyIndex(name) else { return }
@@ -402,15 +420,33 @@ struct ToyView: View {
                 model.t(isNight ? "appearance_night" : "appearance_shell")
             ) { toggleNight() }
         case .pause:
+            let pauseLabel: String = {
+                if model.lan.connected {
+                    return english ? "Pause care (disabled during link)" : "暂停养育（联机中已禁用）"
+                }
+                return model.t(model.prefs.care_paused ? "resume_care" : "pause_care")
+            }()
             chromeButton(
                 model.prefs.care_paused ? "play.circle" : "pause.circle",
-                model.t(model.prefs.care_paused ? "resume_care" : "pause_care"),
-                active: model.prefs.care_paused
-            ) { model.setPaused(!model.prefs.care_paused) }
+                pauseLabel,
+                active: model.prefs.care_paused,
+                disabled: model.lan.connected
+            ) {
+                guard !model.lan.connected else { return }
+                model.setPaused(!model.prefs.care_paused)
+            }
         case .translate:
             translateButton
         case .lan:
             lanButton
+        case .pip:
+            chromeButton(
+                pipEnabled ? "pip.fill" : "pip",
+                pipTitle,
+                active: pipEnabled
+            ) {
+                togglePiP()
+            }
         }
     }
 
@@ -440,7 +476,12 @@ struct ToyView: View {
     private func moreButton(_ available: Set<ToyToolbarAction>) -> some View {
         let extra = toolbarConfig.more(available: available)
         let entries = extra.map { action in
-            ToyMoreEntry(action: action, title: moreTitle(action), symbol: action.symbol)
+            ToyMoreEntry(
+                action: action,
+                title: moreTitle(action),
+                symbol: action.symbol,
+                disabled: action == .pause && model.lan.connected
+            )
         }
         moreRelay.perform = { perform($0) }
         moreRelay.editToolbar = { showToolbarEditor = true }
@@ -448,7 +489,6 @@ struct ToyView: View {
         return ToyMenuButton(
             model: ToyMenuModel(
                 entries: entries,
-                activity: moreActivity(available),
                 night: isNight,
                 english: english,
                 editTitle: english ? "Edit Toolbar" : "编辑顶栏",
@@ -462,23 +502,15 @@ struct ToyView: View {
     private func moreTitle(_ action: ToyToolbarAction) -> String {
         switch action {
         case .pause:
-            // The menu entry names the action it performs, matching the bar.
+            if model.lan.connected {
+                return model.t("pause_care") + (english ? " · In link" : " · 联机中")
+            }
             return model.t(model.prefs.care_paused ? "resume_care" : "pause_care")
         case .lan where model.lan.connected:
             return action.title(english) + (english ? " · Connected" : " · 已连接")
         default:
             return action.title(english)
         }
-    }
-
-    /// A dot on More tells the person an action they tucked away is active
-    /// (paused care, running translation, or a live link).
-    private func moreActivity(_ available: Set<ToyToolbarAction>) -> Bool {
-        let extra = Set(toolbarConfig.more(available: available))
-        if extra.contains(.pause), model.prefs.care_paused { return true }
-        if extra.contains(.translate), liveTranslation { return true }
-        if extra.contains(.lan), model.lan.connected { return true }
-        return false
     }
 
     private func perform(_ action: ToyToolbarAction) {
@@ -488,15 +520,30 @@ struct ToyView: View {
         case .appearance:
             toggleNight()
         case .pause:
+            guard !model.lan.connected else { return }
             model.setPaused(!model.prefs.care_paused)
         case .translate:
             if #available(iOS 18.0, *) { liveTranslation.toggle() }
         case .lan:
             if model.lan.connected {
                 confirmLanDisconnect = true
+            } else if model.prefs.care_paused {
+                confirmResumeForLan = true
             } else {
                 model.showLan = true
             }
+        case .pip:
+            togglePiP()
+        }
+    }
+
+    private func togglePiP() {
+        pipEnabled.toggle()
+        model.setPiP(pipEnabled)
+        if pipEnabled {
+            model.notice = model.t("pip_background_toast")
+        } else {
+            model.notice = model.t("pip_disabled_toast")
         }
     }
 
@@ -526,6 +573,8 @@ struct ToyView: View {
         Button {
             if model.lan.connected {
                 confirmLanDisconnect = true
+            } else if model.prefs.care_paused {
+                confirmResumeForLan = true
             } else {
                 model.showLan = true
             }
@@ -560,15 +609,30 @@ struct ToyView: View {
         model.prefs.language == "en" ? "Live translation" : "实时翻译"
     }
 
-    private func chromeButton(_ symbol: String, _ label: String, active: Bool = false, action: @escaping () -> Void) -> some View {
+    private var pipTitle: String {
+        english ? "Picture in Picture" : "画中画"
+    }
+
+    private func chromeButton(
+        _ symbol: String,
+        _ label: String,
+        active: Bool = false,
+        disabled: Bool = false,
+        action: @escaping () -> Void
+    ) -> some View {
         Button(action: action) {
             Image(systemName: symbol)
                 .font(.system(size: 17, weight: .semibold))
-                .foregroundStyle(active ? Color.pmAccent : chromeColor)
+                .foregroundStyle(
+                    disabled
+                        ? chromeColor.opacity(0.35)
+                        : (active ? Color.pmAccent : chromeColor)
+                )
                 .frame(width: 44, height: 44)
-                .pmGlass(Circle(), interactive: true)
+                .pmGlass(Circle(), interactive: !disabled)
                 .contentShape(Circle())
         }
+        .disabled(disabled)
         .accessibilityLabel(label)
     }
 
@@ -889,6 +953,7 @@ private struct ToyMoreEntry: Equatable, Identifiable {
     let action: ToyToolbarAction
     let title: String
     let symbol: String
+    var disabled: Bool = false
     var id: ToyToolbarAction { action }
 }
 
@@ -902,7 +967,6 @@ private final class ToyMoreRelay {
 
 private struct ToyMenuModel: Equatable {
     var entries: [ToyMoreEntry]
-    var activity: Bool
     var night: Bool
     var english: Bool
     var editTitle: String
@@ -936,7 +1000,6 @@ private struct ToyMenuButton: UIViewRepresentable {
 
 private final class ToyMenuHost: UIView {
     private let button = UIButton(type: .custom)
-    private let badge = UIView()
     private var rendered: ToyMenuModel?
 
     override init(frame: CGRect) {
@@ -945,21 +1008,11 @@ private final class ToyMenuHost: UIView {
         button.preferredMenuElementOrder = .fixed
         button.translatesAutoresizingMaskIntoConstraints = false
         addSubview(button)
-        badge.backgroundColor = UIColor(red: 194.0 / 255, green: 84.0 / 255, blue: 121.0 / 255, alpha: 1)
-        badge.layer.cornerRadius = 4
-        badge.isUserInteractionEnabled = false
-        badge.isHidden = true
-        badge.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(badge)
         NSLayoutConstraint.activate([
             button.leadingAnchor.constraint(equalTo: leadingAnchor),
             button.trailingAnchor.constraint(equalTo: trailingAnchor),
             button.topAnchor.constraint(equalTo: topAnchor),
             button.bottomAnchor.constraint(equalTo: bottomAnchor),
-            badge.widthAnchor.constraint(equalToConstant: 8),
-            badge.heightAnchor.constraint(equalToConstant: 8),
-            badge.topAnchor.constraint(equalTo: topAnchor, constant: 11),
-            badge.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -11),
         ])
     }
 
@@ -972,9 +1025,6 @@ private final class ToyMenuHost: UIView {
         rendered = model
         if previous?.night != model.night || button.configuration == nil {
             button.configuration = Self.chrome(night: model.night)
-        }
-        if previous?.activity != model.activity {
-            badge.isHidden = !model.activity
         }
         let menuChanged = previous?.entries != model.entries
             || previous?.editTitle != model.editTitle
@@ -1024,9 +1074,13 @@ private final class ToyMenuHost: UIView {
 
     private static func menu(_ model: ToyMenuModel, relay: ToyMoreRelay) -> UIMenu {
         let actions = model.entries.map { entry in
-            UIAction(title: entry.title, image: menuIcon(entry.symbol)) { _ in
+            let action = UIAction(title: entry.title, image: menuIcon(entry.symbol)) { _ in
                 relay.perform(entry.action)
             }
+            if entry.disabled {
+                action.attributes = .disabled
+            }
+            return action
         }
         let edit = UIAction(
             title: model.editTitle,

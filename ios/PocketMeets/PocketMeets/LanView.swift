@@ -129,10 +129,15 @@ struct LanView: View {
                 }
             }
             .onAppear {
-                // Joining clears the QR, so only host when nothing is in flight;
-                // otherwise the listener would replace the connection attempt.
-                if !model.lan.connected && model.lan.qr == nil && model.lan.mode == .idle {
-                    model.lan.host()
+                if model.prefs.care_paused {
+                    model.setPaused(false)
+                }
+                // If not connected and not in flight joining, automatically start hosting
+                // (including when reopening after a previous disconnect or failure).
+                if !model.lan.connected && model.lan.mode != .joining {
+                    if model.lan.mode != .hosting || model.lan.qr == nil {
+                        model.lan.host()
+                    }
                 }
             }
             .onChange(of: model.lan.connected) { value in

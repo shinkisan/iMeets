@@ -65,7 +65,13 @@ final class AppModel: ObservableObject {
         }
         if UserDefaults.standard.bool(forKey: "pm.pip") { pip.startFeeding() }
         lanCancel = lan.objectWillChange.sink { [weak self] _ in
-            Task { @MainActor in self?.objectWillChange.send() }
+            Task { @MainActor in
+                guard let self else { return }
+                if self.lan.connected && self.prefs.care_paused {
+                    self.setPaused(false)
+                }
+                self.objectWillChange.send()
+            }
         }
         engine.onFrame = { [weak self] pixels, asleep in
             guard let self else { return }
@@ -102,8 +108,10 @@ final class AppModel: ObservableObject {
                 return
             }
             if route == 2 {
+                _ = self.engine.saveNow()
                 self.page = .web
             } else if route == 3 {
+                _ = self.engine.saveNow()
                 self.page = .mixing
             } else {
                 self.notice = self.t("unsupported_link")
@@ -113,6 +121,9 @@ final class AppModel: ObservableObject {
         enter()
         if ProcessInfo.processInfo.arguments.contains("-pmSettings") {
             page = .settings
+            engine.setVisible(false, interactive: focused)
+        } else if ProcessInfo.processInfo.arguments.contains("-pmLibrary") {
+            page = .library
             engine.setVisible(false, interactive: focused)
         }
     }
@@ -362,6 +373,7 @@ final class AppModel: ObservableObject {
     }
 
     func setPaused(_ paused: Bool) {
+        if paused && lan.connected { return }
         engine.setPaused(paused)
         reload()
         if paused {

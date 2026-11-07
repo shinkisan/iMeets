@@ -373,7 +373,9 @@ impl Session {
             // itself is still never replayed.
             self.sync_clock_to_wall();
         }
-        if !self.save_dir.as_os_str().is_empty() {
+        if paused {
+            let _ = self.save();
+        } else if !self.save_dir.as_os_str().is_empty() {
             let _ = self.care.store(&self.save_dir);
         }
     }
@@ -600,7 +602,7 @@ impl Session {
                 self.error = copy::text(Lang::En, "link_stopped_firmware").into();
                 -1
             }
-            Outcome::Bluetooth | Outcome::Infrared => {
+            Outcome::Bluetooth => {
                 let hosted = self.link.classified
                     && link::step_code(true, self.link.web, self.link.kind) == 2;
                 if hosted {
@@ -613,6 +615,10 @@ impl Session {
                     self.link.cancel();
                     1
                 }
+            }
+            Outcome::Infrared => {
+                self.machine.sys.uart_to_ram();
+                0
             }
             Outcome::Crash | Outcome::Stuck => {
                 self.stopped = true;
@@ -1372,6 +1378,12 @@ mod tests {
         assert!(!link::opens_ble(s.route()));
         assert!(s.notice.contains("returned to the previous screen"));
 
+        let mut s_ir = Session::bare(vec![9, 9, 9, 9]);
+        s_ir.machine.sys.uart_is_ram = false;
+        assert_eq!(s_ir.on_link_stop(Outcome::Infrared), 0);
+        assert!(s_ir.machine.sys.uart_is_ram);
+        assert!(s_ir.notice.is_empty());
+
         let mut s = Session::bare(vec![3, 3, 3, 3]);
         s.link.classified = true;
         s.link.kind = 20;
@@ -1784,6 +1796,18 @@ mod tests {
         let seconds = s.machine.sys.rtc.ticks(s.machine.sys.game_time) as f64 / 32768.0;
         assert!((seconds - tg18::rtc_seconds_now()).abs() < 2.0);
         assert!(s.care.due(tg18::unix_now()) < 2.0);
+    }
+
+    #[test]
+    fn pausing_care_autosaves() {
+        let dir = crate::tmpdir("pause_save");
+        let saves = dir.join("saves");
+        let mut s = Session::bare(vec![0u8; 0x1000]);
+        s.save_dir = saves.clone();
+        s.care_pause(true, tg18::unix_now());
+        assert!(saves.join("autosave.t18s").exists());
+        assert!(saves.join("game.flash").exists());
+        let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]

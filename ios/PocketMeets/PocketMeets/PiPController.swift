@@ -120,6 +120,20 @@ final class PiPController: NSObject {
         }
     }
 
+    /// Starts Picture in Picture immediately from foreground.
+    func startPiP() {
+        guard controller != nil else { return }
+        inBackground = true
+        startFeeding()
+        ensureTimebaseRunning()
+        controller?.canStartPictureInPictureAutomaticallyFromInline = true
+        render()
+        if controller?.isPictureInPicturePossible == true,
+           controller?.isPictureInPictureActive != true {
+            controller?.startPictureInPicture()
+        }
+    }
+
     func backgrounded() {
         backgrounding()
         guard let controller else { return }

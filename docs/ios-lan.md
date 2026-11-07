@@ -63,4 +63,4 @@ xcrun simctl create "iMeets B" com.apple.CoreSimulator.SimDeviceType.iPhone-16 c
 - App 进入后台会挂起 socket；
 - Simulator 没有相机，二维码扫描不可用；
 - 真机与模拟器之间、两台真机之间使用同一套 TCP + tick barrier；
-- 联机前没有自动快照恢复，v1 先在联机前手动保存。
+- 面对面联机连接成功建立时会自动保存一次进度；

@@ -208,6 +208,7 @@ final class LanLink: ObservableObject {
         running = true
         connected = true
         mode = .connected
+        _ = engine?.saveNow()
         receive(conn)
         let timer = DispatchSource.makeTimerSource(queue: tickQueue)
         timer.schedule(deadline: .now(), repeating: .milliseconds(20))

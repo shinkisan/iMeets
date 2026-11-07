@@ -37,6 +37,7 @@ struct SettingsView: View {
             }
             Section(model.t("settings_system")) {
                 Toggle(isOn: pauseBinding) { settingLabel("pause.circle", model.t("pause_care")) }
+                    .disabled(model.lan.connected)
                 Toggle(isOn: $pipEnabled) { settingLabel("pip", pipTitle) }
                     .onChange(of: pipEnabled) { on in model.setPiP(on) }
                 Toggle(isOn: bind(\.fast_keys)) { settingLabel("bolt", model.t("fast_keys_label")) }
@@ -94,6 +95,11 @@ struct SettingsView: View {
             }
         } message: {
             Text(model.t("delete_confirm"))
+        }
+        .onAppear {
+            if ProcessInfo.processInfo.arguments.contains("-pmToolbar") {
+                sheet = .toolbar
+            }
         }
     }
 

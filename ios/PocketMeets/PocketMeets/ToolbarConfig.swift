@@ -6,6 +6,7 @@ enum ToyToolbarAction: String, CaseIterable, Identifiable {
     case pause
     case translate
     case lan
+    case pip
 
     var id: String { rawValue }
 
@@ -16,23 +17,25 @@ enum ToyToolbarAction: String, CaseIterable, Identifiable {
         case .pause: return "pause.circle"
         case .translate: return "character.bubble"
         case .lan: return "antenna.radiowaves.left.and.right"
+        case .pip: return "pip"
         }
     }
 
     func title(_ english: Bool) -> String {
         switch self {
         case .camera: return english ? "Screenshot" : "截图"
-        case .appearance: return english ? "Appearance" : "显示模式"
+        case .appearance: return english ? "Theme" : "主题切换"
         case .pause: return english ? "Pause care" : "暂停养育"
         case .translate: return english ? "Live translation" : "实时翻译"
         case .lan: return english ? "Face to Face" : "面对面"
+        case .pip: return english ? "Picture in Picture" : "画中画"
         }
     }
 
     var fixed: Bool { self == .lan }
 
-    static let defaultOrder: [ToyToolbarAction] = [.appearance, .pause, .translate, .lan, .camera]
-    static let defaultHidden: Set<ToyToolbarAction> = [.camera]
+    static let defaultOrder: [ToyToolbarAction] = [.appearance, .pause, .translate, .lan, .camera, .pip]
+    static let defaultHidden: Set<ToyToolbarAction> = [.camera, .pip]
     static let maxVisible = 4
 
     /// Actions the current look and settings can actually draw. Everything
@@ -43,7 +46,7 @@ enum ToyToolbarAction: String, CaseIterable, Identifiable {
         screenshots: Bool,
         cameraReady: Bool
     ) -> Set<ToyToolbarAction> {
-        var set: Set<ToyToolbarAction> = [.pause, .lan]
+        var set: Set<ToyToolbarAction> = [.pause, .lan, .pip]
         // The small-screen look has no top bar of its own to switch.
         if look != 2 { set.insert(.appearance) }
         if look == 1 || look == 2, screenshots, cameraReady { set.insert(.camera) }
