@@ -3,14 +3,20 @@ import UniformTypeIdentifiers
 
 struct LibraryView: View {
     @EnvironmentObject private var model: AppModel
+    @Environment(\.colorScheme) private var colorScheme
     @State private var picking = false
+
+    private var isNight: Bool {
+        let look = ToyLook.resolve(model.prefs, dark: colorScheme == .dark)
+        return look == 3 || look == 4 || colorScheme == .dark
+    }
 
     var body: some View {
         List {
             Section {
                 if model.library.isEmpty {
                     Text(model.t("no_rom_imported"))
-                        .foregroundStyle(.black)
+                        .foregroundStyle(isNight ? Color(white: 0.7) : Color(uiColor: .secondaryLabel))
                 }
                 ForEach(model.library, id: \.self) { stem in
                     Button {
@@ -22,7 +28,7 @@ struct LibraryView: View {
                     } label: {
                         Label {
                             Text(stem)
-                                .foregroundStyle(.black)
+                                .foregroundStyle(isNight ? Color.white : Color(uiColor: .label))
                         } icon: {
                             Image(systemName: "externaldrive")
                         }
@@ -33,7 +39,7 @@ struct LibraryView: View {
                 Button { picking = true } label: {
                     Label {
                         Text(model.t("choose_rom"))
-                            .foregroundStyle(.black)
+                            .foregroundStyle(isNight ? Color.white : Color(uiColor: .label))
                     } icon: {
                         Image(systemName: "doc.badge.plus")
                     }

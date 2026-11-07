@@ -22,6 +22,20 @@ struct PocketMeetsApp: App {
 struct RootView: View {
     @EnvironmentObject private var model: AppModel
 
+    private var preferredScheme: ColorScheme? {
+        let follows = (model.prefs.appearance == 1 || model.prefs.appearance == 4)
+            ? model.prefs.minimal_follow_system
+            : model.prefs.shell_follow_system
+        if follows {
+            return nil
+        }
+        switch model.prefs.appearance {
+        case 3, 4: return .dark
+        case 0, 1: return .light
+        default: return nil
+        }
+    }
+
     var body: some View {
         NavigationStack {
             ZStack {
@@ -40,6 +54,7 @@ struct RootView: View {
             }
             .animation(.easeInOut(duration: 0.22), value: model.page)
         }
+        .preferredColorScheme(preferredScheme)
         .tint(Color.pmAccent)
         // The layer must live in the window while it is playing, even though
         // the app's own content covers it.
