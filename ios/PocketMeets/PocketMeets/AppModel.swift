@@ -137,6 +137,7 @@ final class AppModel: ObservableObject {
             lanAutoStarted = true
             let payload = args[i + 1]
             DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in
+                self?.showLan = true
                 self?.lan.join(payload: payload)
             }
         }

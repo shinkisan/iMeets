@@ -7,72 +7,86 @@ struct LanView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var scanning = false
 
+    private var isJoining: Bool { model.lan.mode == .joining }
+
     var body: some View {
         NavigationStack {
             VStack(spacing: 16) {
-                if let qr = model.lan.qr {
-                    Image(uiImage: qr)
-                        .interpolation(.none)
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: 240, height: 240)
-                        .padding(16)
-                        .background(Color.white)
-                        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 24, style: .continuous)
-                                .stroke(Color.primary.opacity(0.06), lineWidth: 0.5)
-                        )
-                        .shadow(color: .black.opacity(0.10), radius: 18, y: 6)
-                        .accessibilityLabel("面对面联机二维码")
-
-                    Text("让另一台 iPhone 扫描二维码")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                } else {
+                if isJoining {
+                    Spacer()
                     ProgressView()
-                        .frame(width: 240, height: 240)
-                    Text("正在准备二维码…")
+                        .controlSize(.large)
+                    Text("正在连接…")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
-                }
-
-                if model.lan.connected {
-                    Text("已连接")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                    Button("断开") { model.lan.stop() }
+                    Spacer()
                 } else {
-                    Text("或")
-                        .font(.caption)
-                        .foregroundStyle(.tertiary)
-
-                    Button {
-                        scanning = true
-                    } label: {
-                        Label("扫码加入", systemImage: "camera.viewfinder")
-                            .frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(.bordered)
-                    .controlSize(.large)
-
-                    if case .hosting = model.lan.mode {
-                        HStack(spacing: 6) {
-                            ProgressView().controlSize(.small)
-                            Text("等待扫码")
-                        }
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    }
-                    if case .joining = model.lan.mode {
-                        ProgressView("正在连接…")
-                            .font(.caption)
-                    }
                     if case .failed(let message) = model.lan.mode {
+                        Image(systemName: "wifi.exclamationmark")
+                            .font(.system(size: 44))
+                            .foregroundStyle(.secondary)
+                            .frame(width: 240, height: 240)
                         Text(message)
                             .font(.footnote)
                             .multilineTextAlignment(.center)
                             .foregroundStyle(.secondary)
+                        Button("重试") { model.lan.host() }
+                            .buttonStyle(.bordered)
+                            .controlSize(.large)
+                    } else if let qr = model.lan.qr {
+                        Image(uiImage: qr)
+                            .interpolation(.none)
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 240, height: 240)
+                            .padding(16)
+                            .background(Color.white)
+                            .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                                    .stroke(Color.primary.opacity(0.06), lineWidth: 0.5)
+                            )
+                            .shadow(color: .black.opacity(0.10), radius: 18, y: 6)
+                            .accessibilityLabel("面对面联机二维码")
+
+                        Text("让另一台 iPhone 扫描二维码")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    } else {
+                        ProgressView()
+                            .frame(width: 240, height: 240)
+                        Text("正在准备二维码…")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    if model.lan.connected {
+                        Text("已连接")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                        Button("断开") { model.lan.stop() }
+                    } else {
+                        Text("或")
+                            .font(.caption)
+                            .foregroundStyle(.tertiary)
+
+                        Button {
+                            scanning = true
+                        } label: {
+                            Label("扫码加入", systemImage: "camera.viewfinder")
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.large)
+
+                        if case .hosting = model.lan.mode {
+                            HStack(spacing: 6) {
+                                ProgressView().controlSize(.small)
+                                Text("等待扫码")
+                            }
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        }
                     }
                 }
             }
@@ -115,7 +129,9 @@ struct LanView: View {
                 }
             }
             .onAppear {
-                if !model.lan.connected && model.lan.qr == nil {
+                // Joining clears the QR, so only host when nothing is in flight;
+                // otherwise the listener would replace the connection attempt.
+                if !model.lan.connected && model.lan.qr == nil && model.lan.mode == .idle {
                     model.lan.host()
                 }
             }
