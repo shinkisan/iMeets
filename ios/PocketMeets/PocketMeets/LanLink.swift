@@ -37,10 +37,12 @@ final class LanLink: ObservableObject {
     private var nextHost = 0
     private var port: UInt16 = 0
     private var failure = ""
+    private var connectTimeout: DispatchWorkItem?
 
     func host() {
         stop()
         mode = .hosting
+        print("LAN host start")
         do {
             let listener = try NWListener(using: .tcp, on: .any)
             self.listener = listener
@@ -78,9 +80,11 @@ final class LanLink: ObservableObject {
     func join(payload: String) {
         stop()
         guard let parsed = Self.parse(payload) else {
+            print("LAN join invalid payload")
             fail("二维码无效")
             return
         }
+        print("LAN join hosts=\(parsed.hosts) port=\(parsed.port)")
         hosts = parsed.hosts
         port = parsed.port
         nextHost = 0
@@ -89,6 +93,7 @@ final class LanLink: ObservableObject {
     }
 
     func stop() {
+        cancelConnectTimeout()
         running = false
         started = false
         timer?.cancel()
@@ -124,13 +129,20 @@ final class LanLink: ObservableObject {
         conn.start(queue: netQueue)
     }
 
+    private func cancelConnectTimeout() {
+        connectTimeout?.cancel()
+        connectTimeout = nil
+    }
+
     private func connectNext() {
+        cancelConnectTimeout()
         guard nextHost < hosts.count else {
             fail(failure.isEmpty ? "无法连接" : failure)
             return
         }
         let host = hosts[nextHost]
         nextHost += 1
+        print("LAN try \(host):\(port)")
         guard let nwPort = NWEndpoint.Port(rawValue: port) else {
             fail("端口无效")
             return
@@ -141,8 +153,12 @@ final class LanLink: ObservableObject {
             guard let self else { return }
             switch state {
             case .ready:
+                print("LAN connected")
+                self.cancelConnectTimeout()
                 Task { @MainActor in self.begin() }
             case .failed(let error):
+                print("LAN connect failed \(host): \(error.localizedDescription)")
+                self.cancelConnectTimeout()
                 Task { @MainActor in
                     self.failure = error.localizedDescription
                     guard self.mode == .joining, !self.started else { return }
@@ -153,9 +169,22 @@ final class LanLink: ObservableObject {
             }
         }
         conn.start(queue: netQueue)
+        // A host that black-holes (a stale address, or 127.0.0.1 on a phone)
+        // can take over a minute to fail; give each host a short window.
+        let work = DispatchWorkItem { [weak self] in
+            guard let self, self.mode == .joining, !self.started else { return }
+            print("LAN timeout \(host)")
+            self.failure = "连接超时"
+            self.connection?.cancel()
+            self.connection = nil
+            self.connectNext()
+        }
+        connectTimeout = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3, execute: work)
     }
 
     private func begin() {
+        cancelConnectTimeout()
         guard let conn = connection, !started else { return }
         started = true
         running = true
@@ -223,6 +252,8 @@ final class LanLink: ObservableObject {
     }
 
     private func fail(_ message: String) {
+        print("LAN fail: \(message)")
+        cancelConnectTimeout()
         guard running || mode == .joining || mode == .hosting else { return }
         running = false
         connected = false
@@ -265,22 +296,36 @@ final class LanLink: ObservableObject {
     }
 
     private static func localIPs() -> [String] {
-        var out = ["127.0.0.1"]
+        var out: [String] = []
         var head: UnsafeMutablePointer<ifaddrs>?
-        guard getifaddrs(&head) == 0, let first = head else { return out }
+        guard getifaddrs(&head) == 0, let first = head else { return ["127.0.0.1"] }
         defer { freeifaddrs(head) }
         for ptr in sequence(first: first, next: { $0.pointee.ifa_next }) {
             let ifa = ptr.pointee
             guard let addr = ifa.ifa_addr, addr.pointee.sa_family == UInt8(AF_INET) else { continue }
-            if String(cString: ifa.ifa_name) == "lo0" { continue }
+            let name = String(cString: ifa.ifa_name)
+            if name == "lo0" { continue }
+            // VPN / peer-to-peer interfaces are not reachable from the other
+            // device; advertising them only adds a timeout.
+            if name.hasPrefix("utun") || name.hasPrefix("tun") || name.hasPrefix("tap")
+                || name.hasPrefix("awdl") || name.hasPrefix("llw") || name.hasPrefix("bridge") {
+                continue
+            }
             var host = [CChar](repeating: 0, count: Int(NI_MAXHOST))
             let rc = host.withUnsafeMutableBufferPointer { buf in
                 getnameinfo(addr, socklen_t(addr.pointee.sa_len), buf.baseAddress, socklen_t(buf.count), nil, 0, NI_NUMERICHOST)
             }
             guard rc == 0 else { continue }
             let ip = host.withUnsafeBufferPointer { String(cString: $0.baseAddress!) }
+            // Link-local addresses are not reachable from the other device.
+            if ip.hasPrefix("169.254.") { continue }
+            // Clash/Surge fake-IP range.
+            if ip.hasPrefix("198.18.") || ip.hasPrefix("198.19.") { continue }
             if !out.contains(ip) { out.append(ip) }
         }
+        // Loopback is only a fallback for two simulators on one Mac; trying it
+        // first from a phone just stalls until the TCP timeout.
+        out.append("127.0.0.1")
         return out
     }
 
