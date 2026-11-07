@@ -38,6 +38,7 @@ final class LanLink: ObservableObject {
     private var port: UInt16 = 0
     private var failure = ""
     private var connectTimeout: DispatchWorkItem?
+    private var useWifi = true
 
     func host() {
         stop()
@@ -88,6 +89,7 @@ final class LanLink: ObservableObject {
         hosts = parsed.hosts
         port = parsed.port
         nextHost = 0
+        useWifi = true
         mode = .joining
         connectNext()
     }
@@ -137,17 +139,33 @@ final class LanLink: ObservableObject {
     private func connectNext() {
         cancelConnectTimeout()
         guard nextHost < hosts.count else {
+            // A VPN can capture the default route even though the devices
+            // share a Wi-Fi network. Retry every host once bound to Wi-Fi
+            // before giving up; that also covers wired-only Macs.
+            if useWifi {
+                useWifi = false
+                nextHost = 0
+                print("LAN retry without interface binding")
+                connectNext()
+                return
+            }
             fail(failure.isEmpty ? "无法连接" : failure)
             return
         }
         let host = hosts[nextHost]
         nextHost += 1
-        print("LAN try \(host):\(port)")
+        print("LAN try \(host):\(port) wifi=\(useWifi)")
         guard let nwPort = NWEndpoint.Port(rawValue: port) else {
             fail("端口无效")
             return
         }
-        let conn = NWConnection(host: NWEndpoint.Host(host), port: nwPort, using: .tcp)
+        let params = NWParameters.tcp
+        if useWifi {
+            // Bind to Wi-Fi so a VPN/utun default route cannot swallow the
+            // connection to the other device on the same network.
+            params.requiredInterfaceType = .wifi
+        }
+        let conn = NWConnection(host: NWEndpoint.Host(host), port: nwPort, using: params)
         connection = conn
         conn.stateUpdateHandler = { [weak self] state in
             guard let self else { return }
