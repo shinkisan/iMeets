@@ -1000,7 +1000,7 @@ private final class ToyMenuHost: UIView {
         let image = UIImage(
             systemName: "ellipsis",
             withConfiguration: UIImage.SymbolConfiguration(pointSize: 17, weight: .semibold)
-        )
+        )?.withTintColor(color, renderingMode: .alwaysOriginal)
         if #available(iOS 26.0, *) {
             var config = UIButton.Configuration.glass()
             config.image = image
@@ -1017,21 +1017,26 @@ private final class ToyMenuHost: UIView {
         return config
     }
 
+    private static func menuIcon(_ name: String) -> UIImage? {
+        let accent = UIColor(red: 194.0 / 255, green: 84.0 / 255, blue: 121.0 / 255, alpha: 1)
+        return UIImage(systemName: name)?.withTintColor(accent, renderingMode: .alwaysOriginal)
+    }
+
     private static func menu(_ model: ToyMenuModel, relay: ToyMoreRelay) -> UIMenu {
         let actions = model.entries.map { entry in
-            UIAction(title: entry.title, image: UIImage(systemName: entry.symbol)) { _ in
+            UIAction(title: entry.title, image: menuIcon(entry.symbol)) { _ in
                 relay.perform(entry.action)
             }
         }
         let edit = UIAction(
             title: model.editTitle,
-            image: UIImage(systemName: "slider.horizontal.3")
+            image: menuIcon("slider.horizontal.3")
         ) { _ in
             relay.editToolbar()
         }
         let settings = UIAction(
             title: model.settingsTitle,
-            image: UIImage(systemName: "gearshape")
+            image: menuIcon("gearshape")
         ) { _ in
             relay.openSettings()
         }
