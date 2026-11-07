@@ -63,7 +63,6 @@ final class AppModel: ObservableObject {
             guard let self else { return ([], true) }
             return (self.pixels, self.asleep)
         }
-        if UserDefaults.standard.bool(forKey: "pm.pip") { pip.startFeeding() }
         lanCancel = lan.objectWillChange.sink { [weak self] _ in
             Task { @MainActor in
                 guard let self else { return }
@@ -172,6 +171,7 @@ final class AppModel: ObservableObject {
             page = .setup
             engine.setVisible(false, interactive: focused)
         }
+        updatePiPEligibility()
         showNotes = false
     }
 
@@ -219,6 +219,7 @@ final class AppModel: ObservableObject {
             engine.foregroundTasks { [weak self] in
                 guard let self else { return }
                 self.reload()
+                self.updatePiPEligibility()
                 self.engine.planForecast(visible: true, missedGap: missedGap)
             }
         case .background:
@@ -245,16 +246,28 @@ final class AppModel: ObservableObject {
         }
     }
 
-    /// The LCD floats in Picture in Picture only when the person enabled it
-    /// and a ROM is actually running.
+    /// The LCD floats in Picture in Picture only when the person enabled it,
+    /// care is not paused, and a ROM is actually running.
     private var pipWanted: Bool {
-        UserDefaults.standard.bool(forKey: "pm.pip") && hasSession
+        UserDefaults.standard.bool(forKey: "pm.pip") && hasSession && !prefs.care_paused
+    }
+
+    func updatePiPEligibility() {
+        let wanted = pipWanted
+        pip.isAutomaticAllowed = wanted
+        if wanted {
+            pip.startFeeding()
+        } else {
+            pip.stopPiP()
+        }
     }
 
     func setPiP(_ on: Bool) {
+        UserDefaults.standard.set(on, forKey: "pm.pip")
         if on {
-            pip.startFeeding()
+            updatePiPEligibility()
         } else {
+            pip.isAutomaticAllowed = false
             pip.shutdown()
             engine.setPipFrames(false)
         }
@@ -376,6 +389,7 @@ final class AppModel: ObservableObject {
         if paused && lan.connected { return }
         engine.setPaused(paused)
         reload()
+        updatePiPEligibility()
         if paused {
             UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: ["2"])
         }

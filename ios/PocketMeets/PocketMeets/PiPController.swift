@@ -68,6 +68,13 @@ final class PiPController: NSObject {
         hostView.displayLayer.controlTimebase = created
     }
 
+    /// Whether iOS is allowed to automatically transition to PiP when the app backgrounds.
+    var isAutomaticAllowed: Bool = true {
+        didSet {
+            controller?.canStartPictureInPictureAutomaticallyFromInline = isAutomaticAllowed
+        }
+    }
+
     private func makeController() {
         guard AVPictureInPictureController.isPictureInPictureSupported() else {
             return
@@ -79,7 +86,7 @@ final class PiPController: NSObject {
         let controller = AVPictureInPictureController(contentSource: source)
         controller.delegate = self
         controller.requiresLinearPlayback = true
-        controller.canStartPictureInPictureAutomaticallyFromInline = true
+        controller.canStartPictureInPictureAutomaticallyFromInline = isAutomaticAllowed
         self.controller = controller
     }
 
@@ -92,7 +99,7 @@ final class PiPController: NSObject {
         // Keep the audio session active while the feature is on: PiP only
         // reports itself as possible for a playing app.
         audio.start()
-        controller?.canStartPictureInPictureAutomaticallyFromInline = true
+        controller?.canStartPictureInPictureAutomaticallyFromInline = isAutomaticAllowed
         render()
         // Heartbeat for a still LCD, and for a renderer that failed after
         // backgrounding. Picture changes are pushed as soon as they happen.
@@ -106,11 +113,11 @@ final class PiPController: NSObject {
     /// Resigning active: start the keep-alive audio and let iOS move the layer
     /// into PiP as the app backgrounds.
     func backgrounding() {
-        guard controller != nil else { return }
+        guard isAutomaticAllowed, controller != nil else { return }
         inBackground = true
         startFeeding()
         ensureTimebaseRunning()
-        controller?.canStartPictureInPictureAutomaticallyFromInline = true
+        controller?.canStartPictureInPictureAutomaticallyFromInline = isAutomaticAllowed
         render()
         // Starting while the app is still in the foreground half of the
         // transition is the only reliable manual call.
@@ -135,6 +142,7 @@ final class PiPController: NSObject {
     }
 
     func backgrounded() {
+        guard isAutomaticAllowed else { return }
         backgrounding()
         guard let controller else { return }
         if controller.isPictureInPicturePossible && !controller.isPictureInPictureActive {
@@ -144,6 +152,12 @@ final class PiPController: NSObject {
 
     func foregrounded() {
         inBackground = false
+        if controller?.isPictureInPictureActive == true {
+            controller?.stopPictureInPicture()
+        }
+    }
+
+    func stopPiP() {
         if controller?.isPictureInPictureActive == true {
             controller?.stopPictureInPicture()
         }
