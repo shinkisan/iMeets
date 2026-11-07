@@ -40,16 +40,8 @@ pub struct Settings {
     pub muted: bool,
     #[serde(default)]
     pub follow_system_sleep: bool,
-    #[serde(default = "yes")]
-    pub background_care: bool,
     #[serde(default)]
     pub care_paused: bool,
-    #[serde(default)]
-    pub care_auto_resume: bool,
-    #[serde(default)]
-    pub care_fallback_notice: bool,
-    #[serde(default)]
-    pub care_resumed_notice: bool,
     #[serde(default)]
     pub care_intro_version: i32,
     #[serde(default)]
@@ -94,11 +86,7 @@ impl Settings {
             key_haptics: true,
             muted: false,
             follow_system_sleep: false,
-            background_care: true,
             care_paused: false,
-            care_auto_resume: false,
-            care_fallback_notice: false,
-            care_resumed_notice: false,
             care_intro_version: 0,
             notifications_requested: false,
             last_call_notification: 0,
@@ -137,8 +125,6 @@ impl Settings {
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct CarePlan {
     #[serde(default)]
-    pub heartbeat: i64,
-    #[serde(default)]
     pub epoch: i64,
     #[serde(default)]
     pub cursor: String,
@@ -155,7 +141,6 @@ pub struct CarePlan {
 impl CarePlan {
     pub fn new() -> Self {
         Self {
-            heartbeat: 0,
             epoch: 0,
             cursor: String::new(),
             past: String::new(),
@@ -196,9 +181,6 @@ pub fn load_settings(path: &Path) -> Settings {
         }
         if obj.contains_key("small_screen_scale") {
             s.small_screen_size_configured = true;
-        }
-        if !obj.contains_key("background_care") {
-            s.background_care = true;
         }
         if !obj.contains_key("language") {
             s.language = "zh".into();
@@ -287,49 +269,9 @@ pub fn set_scale(s: &mut Settings, percent: i32) {
     s.small_screen_size_configured = true;
 }
 
-/// Choosing a care mode by hand clears the watchdog memory.
-pub fn set_background_care(s: &mut Settings, on: bool) {
-    s.background_care = on;
-    s.care_auto_resume = false;
-    s.care_fallback_notice = false;
-    s.care_resumed_notice = false;
-}
-
 pub fn set_paused(s: &mut Settings, plan: &mut CarePlan, paused: bool) {
     s.care_paused = paused;
     plan.invalidate();
-}
-
-pub fn note_heartbeat(plan: &mut CarePlan, now_ms: i64) {
-    plan.heartbeat = now_ms;
-}
-
-/// iOS runs a background refresh when it feels like it, often hours apart on
-/// a phone that is not charging. Only treat the heartbeat as dead once the gap
-/// is longer than any normal schedule.
-pub const WATCHDOG_MS: i64 = 6 * 60 * 60 * 1000;
-
-pub fn watchdog_due(plan: &CarePlan, now_ms: i64) -> bool {
-    plan.heartbeat > 0 && now_ms.saturating_sub(plan.heartbeat) > WATCHDOG_MS
-}
-
-pub fn apply_fallback(s: &mut Settings) {
-    s.background_care = false;
-    s.care_auto_resume = true;
-    s.care_fallback_notice = true;
-}
-
-/// Restores background care after a watchdog trip without telling the user:
-/// both modes catch up on the next open, so the sentence only ever read as
-/// jargon. Returns None on purpose; the signature stays for the callers.
-pub fn foreground_notice(s: &mut Settings) -> Option<&'static str> {
-    if s.care_auto_resume {
-        s.background_care = true;
-        s.care_auto_resume = false;
-    }
-    s.care_fallback_notice = false;
-    s.care_resumed_notice = false;
-    None
 }
 
 #[cfg(test)]
@@ -337,12 +279,11 @@ mod tests {
     use super::*;
 
     #[test]
-    fn defaults_legacy_language_scale_and_watchdog() {
+    fn defaults_legacy_language_and_scale() {
         let dir = crate::tmpdir("settings");
         let path = dir.join("settings");
         let s = load_settings(&path);
         assert_eq!(s.language, "zh");
-        assert!(s.background_care);
         assert!(!s.care_paused);
         assert_eq!(s.appearance, 0);
         assert!(!s.dot_matrix);
@@ -358,7 +299,6 @@ mod tests {
         fs::write(&path, r#"{"minimal_ui":true,"background_care":false}"#).unwrap();
         let s = load_settings(&path);
         assert_eq!(s.appearance, 1);
-        assert!(!s.background_care);
         assert_eq!(s.language, "zh");
 
         fs::write(&path, r#"{"small_screen_scale":180,"language":"en"}"#).unwrap();
@@ -391,24 +331,6 @@ mod tests {
         assert!(plan.cursor.is_empty());
         set_paused(&mut s, &mut plan, false);
         assert_eq!(plan.epoch, 2);
-
-        note_heartbeat(&mut plan, 1_000);
-        assert!(!watchdog_due(&plan, 1_000 + WATCHDOG_MS));
-        assert!(watchdog_due(&plan, 1_000 + WATCHDOG_MS + 1));
-        apply_fallback(&mut s);
-        assert!(!s.background_care);
-        assert!(s.care_auto_resume);
-        assert!(s.care_fallback_notice);
-        assert!(foreground_notice(&mut s).is_none());
-        assert!(s.background_care);
-        assert!(!s.care_auto_resume);
-        assert!(!s.care_fallback_notice);
-
-        apply_fallback(&mut s);
-        set_background_care(&mut s, false);
-        assert!(!s.care_auto_resume);
-        assert!(!s.care_fallback_notice);
-        assert!(foreground_notice(&mut s).is_none());
 
         let _ = fs::remove_dir_all(&dir);
     }

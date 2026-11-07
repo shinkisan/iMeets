@@ -30,7 +30,6 @@
 		A30000000000000000000002 /* Photos.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A40000000000000000000002 /* Photos.framework */; };
 		A30000000000000000000003 /* AVFoundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A40000000000000000000003 /* AVFoundation.framework */; };
 		A30000000000000000000004 /* UserNotifications.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A40000000000000000000004 /* UserNotifications.framework */; };
-		A30000000000000000000005 /* BackgroundTasks.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A40000000000000000000005 /* BackgroundTasks.framework */; };
 		A10000000000000000000017 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000017 /* Assets.xcassets */; };
 		A10000000000000000000018 /* LanLink.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000018 /* LanLink.swift */; };
 		A10000000000000000000019 /* LanView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000019 /* LanView.swift */; };
@@ -65,7 +64,6 @@
 		A40000000000000000000002 /* Photos.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Photos.framework; path = System/Library/Frameworks/Photos.framework; sourceTree = SDKROOT; };
 		A40000000000000000000003 /* AVFoundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AVFoundation.framework; path = System/Library/Frameworks/AVFoundation.framework; sourceTree = SDKROOT; };
 		A40000000000000000000004 /* UserNotifications.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = UserNotifications.framework; path = System/Library/Frameworks/UserNotifications.framework; sourceTree = SDKROOT; };
-		A40000000000000000000005 /* BackgroundTasks.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = BackgroundTasks.framework; path = System/Library/Frameworks/BackgroundTasks.framework; sourceTree = SDKROOT; };
 		A20000000000000000000017 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		A20000000000000000000018 /* LanLink.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LanLink.swift; sourceTree = "<group>"; };
 		A20000000000000000000019 /* LanView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LanView.swift; sourceTree = "<group>"; };
@@ -82,7 +80,6 @@
 				A30000000000000000000002 /* Photos.framework in Frameworks */,
 				A30000000000000000000003 /* AVFoundation.framework in Frameworks */,
 				A30000000000000000000004 /* UserNotifications.framework in Frameworks */,
-				A30000000000000000000005 /* BackgroundTasks.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -146,7 +143,6 @@
 				A40000000000000000000002 /* Photos.framework */,
 				A40000000000000000000003 /* AVFoundation.framework */,
 				A40000000000000000000004 /* UserNotifications.framework */,
-				A40000000000000000000005 /* BackgroundTasks.framework */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";

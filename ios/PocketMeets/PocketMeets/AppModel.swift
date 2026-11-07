@@ -1,4 +1,3 @@
-import BackgroundTasks
 import Combine
 import SwiftUI
 import UserNotifications
@@ -51,7 +50,6 @@ final class AppModel: ObservableObject {
     @Published var showHelp = false
     @Published var showLanguage = false
     @Published var showLan = false
-    private var heart: Timer?
     private var noticeTask: Task<Void, Never>?
     private var lanCancel: AnyCancellable?
     private var lanAutoStarted = false
@@ -111,9 +109,12 @@ final class AppModel: ObservableObject {
                 self.notice = self.t("unsupported_link")
             }
         }
-        registerBackground()
         reload()
         enter()
+        if ProcessInfo.processInfo.arguments.contains("-pmSettings") {
+            page = .settings
+            engine.setVisible(false, interactive: focused)
+        }
     }
 
     func t(_ key: String) -> String { engine.text(key, lang: prefs.langCode) }
@@ -204,12 +205,9 @@ final class AppModel: ObservableObject {
             let missedGap = cameFromBackground
             cameFromBackground = false
             engine.setVisible(page == .toy || page == .mixing, interactive: true)
-            heart?.invalidate()
-            UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: ["1"])
-            engine.foregroundTasks { [weak self] sentence in
+            engine.foregroundTasks { [weak self] in
                 guard let self else { return }
                 self.reload()
-                if !sentence.isEmpty { self.notice = sentence }
                 self.engine.planForecast(visible: true, missedGap: missedGap)
             }
         case .background:
@@ -222,14 +220,6 @@ final class AppModel: ObservableObject {
             engine.setVisible(false, interactive: false)
             if pipWanted { pip.backgrounded() }
             _ = engine.saveNow()
-            engine.noteHeartbeat()
-            if prefs.background_care && !prefs.care_paused {
-                engine.postResidence(lang: prefs.langCode)
-                heart = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { [weak self] _ in
-                    Task { @MainActor in self?.engine.noteHeartbeat() }
-                }
-            }
-            scheduleRefresh()
         case .inactive:
             focused = false
             if pipWanted { engine.setPipFrames(true) }
@@ -264,11 +254,6 @@ final class AppModel: ObservableObject {
         let error = engine.write(prefs)
         reload()
         if !error.isEmpty { notice = error }
-    }
-
-    func setEnhanced(_ on: Bool) {
-        prefs = engine.setEnhanced(on)
-        if on && !prefs.care_paused { engine.postResidence(lang: prefs.langCode) }
     }
 
     /// Matches `settings::finish_guide`: version 2, and the capture flag when screenshots are on.
@@ -380,7 +365,7 @@ final class AppModel: ObservableObject {
         engine.setPaused(paused)
         reload()
         if paused {
-            UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: ["2", "1"])
+            UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: ["2"])
         }
     }
 
@@ -406,39 +391,5 @@ final class AppModel: ObservableObject {
                 self.reload()
             }
         }
-        let pause = UNNotificationAction(identifier: "pause", title: t("pause"), options: [])
-        let category = UNNotificationCategory(identifier: "residence", actions: [pause], intentIdentifiers: [], options: [])
-        UNUserNotificationCenter.current().setNotificationCategories([category])
-    }
-
-    private func registerBackground() {
-        BGTaskScheduler.shared.register(forTaskWithIdentifier: "app.pocketmeets.ios.refresh", using: nil) { task in
-            task.expirationHandler = { task.setTaskCompleted(success: false) }
-            Task { @MainActor in
-                self.engine.noteHeartbeat()
-                _ = self.engine.watchCare()
-                self.scheduleRefresh()
-                task.setTaskCompleted(success: true)
-            }
-        }
-        BGTaskScheduler.shared.register(forTaskWithIdentifier: "app.pocketmeets.ios.care", using: nil) { task in
-            task.expirationHandler = { task.setTaskCompleted(success: false) }
-            Task { @MainActor in
-                self.engine.noteHeartbeat()
-                _ = self.engine.saveNow()
-                self.scheduleRefresh()
-                task.setTaskCompleted(success: true)
-            }
-        }
-    }
-
-    private func scheduleRefresh() {
-        let request = BGAppRefreshTaskRequest(identifier: "app.pocketmeets.ios.refresh")
-        request.earliestBeginDate = Date(timeIntervalSinceNow: 30)
-        try? BGTaskScheduler.shared.submit(request)
-        let processing = BGProcessingTaskRequest(identifier: "app.pocketmeets.ios.care")
-        processing.requiresNetworkConnectivity = false
-        processing.earliestBeginDate = Date(timeIntervalSinceNow: 60)
-        try? BGTaskScheduler.shared.submit(processing)
     }
 }

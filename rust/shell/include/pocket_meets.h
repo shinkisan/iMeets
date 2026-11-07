@@ -194,9 +194,6 @@ char *pm_custom_import(const char *root, const char *path, int kind);
 void pm_set_root(PmSession *s, const char *root);
 char *pm_switch_image(PmSession *s, const char *rom_path);
 
-char *pm_care_foreground(const char *root);
-int pm_care_watch(const char *root, long long now_ms);
-int pm_note_heartbeat(const char *root, long long now_ms);
 char *pm_alarm_exact(int allowed);
 
 /* Last openCare / open error when the session pointer is null. */
@@ -207,8 +204,6 @@ char *pm_call_decision(int take_call, int visible, int muted, long long now_ms, 
 int pm_alarm_post(long long event_ms, long long now_ms, int visible, int missed_gap);
 /* Items in the installed pack for one tab. Paths are absolute. */
 char *pm_shelf_list(const char *root, const char *tab, const char *language);
-/* Manual enhanced-care choice. Clears the watchdog restore memory. */
-char *pm_set_background_care(const char *root, int on);
 /* Unified pause. Invalidates the forecast plan. The UI also calls pm_care_pause. */
 int pm_set_care_paused(const char *root, int paused);
 

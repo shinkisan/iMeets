@@ -36,7 +36,6 @@ struct SettingsView: View {
                 Toggle(isOn: hapticsBinding) { settingLabel("hand.tap", model.t("key_haptics_label")) }
             }
             Section(model.t("settings_system")) {
-                Toggle(isOn: enhancedBinding) { settingLabel("moon", model.t("residence_toggle")) }
                 Toggle(isOn: pauseBinding) { settingLabel("pause.circle", model.t("pause_care")) }
                 Toggle(isOn: $pipEnabled) { settingLabel("pip", pipTitle) }
                     .onChange(of: pipEnabled) { on in model.setPiP(on) }
@@ -203,10 +202,6 @@ struct SettingsView: View {
             // A sample so the switch itself shows whether the device vibrates.
             KeyHaptics.tap()
         })
-    }
-
-    private var enhancedBinding: Binding<Bool> {
-        Binding(get: { model.prefs.background_care }, set: { model.setEnhanced($0) })
     }
 
     private var pauseBinding: Binding<Bool> {
@@ -392,29 +387,5 @@ struct LookSheet: View {
     private func commit(_ next: Prefs) {
         _ = model.engine.write(next)
         model.reload()
-    }
-}
-
-struct CareSheet: View {
-    @EnvironmentObject private var model: AppModel
-    @Environment(\.dismiss) private var dismiss
-
-    var body: some View {
-        NavigationStack {
-            Form {
-                Section(model.t("help_care_title")) {
-                    Toggle(model.t("residence_toggle"), isOn: Binding(get: { model.prefs.background_care }, set: { model.setEnhanced($0) }))
-                    Text(model.t("ios_background")).font(.footnote)
-                    Toggle(model.t("pause_care"), isOn: Binding(get: { model.prefs.care_paused }, set: { model.setPaused($0) }))
-                    Text(model.t("alarm_inexact")).font(.footnote)
-                    Text(model.t("long_absence")).font(.footnote)
-                    Text(model.t("force_quit_help")).font(.footnote)
-                }
-            }
-            .navigationTitle(model.t("help_care_title"))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .confirmationAction) { Button { dismiss() } label: { Image(systemName: "checkmark").font(.system(size: 17, weight: .semibold)) }
-                .accessibilityLabel(model.t("done")) } }
-        }
     }
 }

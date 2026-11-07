@@ -278,21 +278,6 @@ pub extern "C" fn pm_shelf_list(
 }
 
 #[no_mangle]
-pub extern "C" fn pm_set_background_care(root: *const c_char, on: i32) -> *mut c_char {
-    let Some(root) = c_str(root) else {
-        return owned(r#"{"ok":false,"error":"null session or request"}"#);
-    };
-    let path = Path::new(&root).join("settings");
-    let mut s = settings::load_settings(&path);
-    settings::set_background_care(&mut s, on != 0);
-    let text = serde_json::to_string(&s).unwrap_or_else(|_| "{}".into());
-    match settings::store_settings(&path, &text) {
-        Ok(stored) => owned(serde_json::to_string(&stored).unwrap_or_else(|_| "{}".into())),
-        Err(e) => owned(json!({"ok": false, "error": e}).to_string()),
-    }
-}
-
-#[no_mangle]
 pub extern "C" fn pm_set_care_paused(root: *const c_char, paused: i32) -> i32 {
     let Some(root) = c_str(root) else { return -1 };
     let root = Path::new(&root);
@@ -1187,48 +1172,6 @@ pub extern "C" fn pm_switch_image(p: *mut Session, rom_path: *const c_char) -> *
     match s.switch_to_image(&bytes, &saves) {
         Ok(msg) => owned(json!({"ok": true, "result": {"message": msg}}).to_string()),
         Err(e) => owned(json!({"ok": false, "error": e}).to_string()),
-    }
-}
-
-#[no_mangle]
-pub extern "C" fn pm_care_foreground(root: *const c_char) -> *mut c_char {
-    let Some(root) = c_str(root) else {
-        return owned("");
-    };
-    let settings_path = Path::new(&root).join("settings");
-    let mut s = settings::load_settings(&settings_path);
-    let notice = settings::foreground_notice(&mut s).unwrap_or("");
-    let text = serde_json::to_string(&s).unwrap_or_else(|_| "{}".into());
-    let _ = settings::store_settings(&settings_path, &text);
-    owned(notice)
-}
-
-#[no_mangle]
-pub extern "C" fn pm_care_watch(root: *const c_char, now_ms: i64) -> i32 {
-    let Some(root) = c_str(root) else { return 0 };
-    let root = Path::new(&root);
-    let settings_path = root.join("settings");
-    let plan_path = root.join("care_plan");
-    let mut s = settings::load_settings(&settings_path);
-    let plan = settings::load_plan(&plan_path);
-    if settings::watchdog_due(&plan, now_ms) && s.background_care {
-        settings::apply_fallback(&mut s);
-        let text = serde_json::to_string(&s).unwrap_or_else(|_| "{}".into());
-        let _ = settings::store_settings(&settings_path, &text);
-        return 1;
-    }
-    0
-}
-
-#[no_mangle]
-pub extern "C" fn pm_note_heartbeat(root: *const c_char, now_ms: i64) -> i32 {
-    let Some(root) = c_str(root) else { return -1 };
-    let path = Path::new(&root).join("care_plan");
-    let mut plan = settings::load_plan(&path);
-    settings::note_heartbeat(&mut plan, now_ms);
-    match settings::store_plan(&path, &plan) {
-        Ok(()) => 0,
-        Err(_) => -1,
     }
 }
 

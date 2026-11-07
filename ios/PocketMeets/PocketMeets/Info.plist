@@ -55,13 +55,6 @@
 	<array>
 		<string>audio</string>
 		<string>bluetooth-peripheral</string>
-		<string>fetch</string>
-		<string>processing</string>
-	</array>
-	<key>BGTaskSchedulerPermittedIdentifiers</key>
-	<array>
-		<string>app.pocketmeets.ios.refresh</string>
-		<string>app.pocketmeets.ios.care</string>
 	</array>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>

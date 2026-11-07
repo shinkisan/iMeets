@@ -239,50 +239,12 @@ final class Engine {
         }
     }
 
-    func setEnhanced(_ on: Bool) -> Prefs {
-        queue.sync {
-            let json = root.path.withCString { CString.take(pm_set_background_care($0, on ? 1 : 0)) }
-            let prefs = Prefs.load(json)
-            cachedPrefs = prefs
-            return prefs
-        }
-    }
-
-    func foregroundCare() -> String {
-        queue.sync {
-            let now = Int64(Date().timeIntervalSince1970 * 1000)
-            _ = root.path.withCString { pm_care_watch($0, now) }
-            let text = localizedUnlocked(root.path.withCString { CString.take(pm_care_foreground($0)) })
-            cachedPrefs = nil
-            return text
-        }
-    }
-
-    /// Run the foreground watchdog/settings work behind any catch-up
-    /// replay, then hand the notice back on the main thread.
-    func foregroundTasks(_ done: @escaping (String) -> Void) {
+    /// Settings and the forecast are refreshed behind any catch-up replay, then
+    /// the caller runs on the main thread.
+    func foregroundTasks(_ done: @escaping () -> Void) {
         queue.async {
-            let now = Int64(Date().timeIntervalSince1970 * 1000)
-            _ = self.root.path.withCString { pm_care_watch($0, now) }
-            let text = self.localizedUnlocked(self.root.path.withCString { CString.take(pm_care_foreground($0)) })
             self.cachedPrefs = nil
-            DispatchQueue.main.async { done(text) }
-        }
-    }
-
-    func noteHeartbeat() {
-        queue.sync {
-            let now = Int64(Date().timeIntervalSince1970 * 1000)
-            _ = root.path.withCString { pm_note_heartbeat($0, now) }
-        }
-    }
-
-    func watchCare() -> Bool {
-        queue.sync {
-            let now = Int64(Date().timeIntervalSince1970 * 1000)
-            let fell = root.path.withCString { pm_care_watch($0, now) != 0 }
-            if fell { cachedPrefs = nil }
-            return fell
+            DispatchQueue.main.async { done() }
         }
     }
 
@@ -708,28 +670,6 @@ final class Engine {
             let request = UNNotificationRequest(identifier: "2", content: content, trigger: trigger)
             UNUserNotificationCenter.current().add(request)
         }
-    }
-
-    func postResidence(lang: Int32) {
-        let content = UNMutableNotificationContent()
-        content.title = text("residence_title", lang: lang)
-        content.body = text("residence_body", lang: lang)
-        content.threadIdentifier = "pet_running"
-        content.sound = nil
-        content.interruptionLevel = .passive
-        content.categoryIdentifier = "residence"
-        // Foreground-service id is 1. Call id is 2, failure id is 3, self-test id is 4.
-        let request = UNNotificationRequest(identifier: "1", content: content, trigger: nil)
-        UNUserNotificationCenter.current().add(request)
-    }
-
-    func postCareFailure(lang: Int32) {
-        let content = UNMutableNotificationContent()
-        content.title = text("care_attention", lang: lang)
-        content.body = text("care_fallback", lang: lang)
-        content.threadIdentifier = "pet_running"
-        let request = UNNotificationRequest(identifier: "3", content: content, trigger: nil)
-        UNUserNotificationCenter.current().add(request)
     }
 
     /// Offline forecast. Budget 200, horizon handling stays in the core's decide().

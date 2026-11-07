@@ -96,7 +96,6 @@ const ROWS: &[Row] = &[
     Row { key: "screenshot_ok", zh: "已保存到 Pictures/iMeets", en: "saved to Pictures/iMeets" },
     Row { key: "call_title", zh: "拓麻歌子在叫你", en: "your Tamagotchi is calling" },
     Row { key: "call_body", zh: "它刚刚醒来并叫了你，点按查看。", en: "it just woke and called; tap to look" },
-    Row { key: "care_attention", zh: "照顾需要留意", en: "care needs attention" },
     Row { key: "forecast_stopped", zh: "固件预测在下一次呼叫前停止了。", en: "Firmware forecast stopped before its next call." },
     Row { key: "gift_saved", zh: "礼物已收到，进度已保存", en: "gift received, progress saved" },
     Row { key: "conn_interrupted", zh: "连接已中断，进度已恢复到连接前", en: "connection interrupted, progress restored to before the connection" },
@@ -107,8 +106,6 @@ const ROWS: &[Row] = &[
     Row { key: "ble_off", zh: "蓝牙已关闭，这次接收已结束", en: "Bluetooth is off; this receive has ended" },
     Row { key: "ble_permission", zh: "需要附近设备权限", en: "nearby-devices permission is required" },
     Row { key: "ble_waiting", zh: "等待 WebMeets 连接 · TMGC_meets", en: "等待 WebMeets 连接 · TMGC_meets" },
-    Row { key: "care_restored", zh: "增强模式已恢复；如果你暂停过，暂停仍然有效", en: "enhanced mode restored; if you had paused, pause stays" },
-    Row { key: "care_fallback", zh: "后台照顾被打断了，已切换到普通模式，时间仍会同步", en: "background care was interrupted, switched to normal mode, time still syncs" },
     Row { key: "service_not_ready", zh: "正在连接照顾服务，请再试一次。进度已保存。", en: "Connecting the care service; try again. Progress was saved." },
     Row { key: "load_pack_first", zh: "请先载入素材 ZIP", en: "load a material ZIP first" },
     Row { key: "chest_sentence", zh: "已送到你的宝箱，可以拿来使用或穿戴", en: "sent to your chest to use or wear" },
@@ -122,9 +119,6 @@ const ROWS: &[Row] = &[
     Row { key: "alarm_exact", zh: "呼叫使用精确定时", en: "notifications use an exact alarm" },
     Row { key: "alarm_inexact", zh: "通知可能会晚到", en: "notifications may be late" },
     Row { key: "back_confirm", zh: "现在结束会恢复到连接前的进度，并丢弃外出奖励。想保留奖励，请在游戏里选择返回。", en: "Ending now restores pre-connection progress and discards outing rewards. Keeping rewards is done with the in-game Return." },
-    Row { key: "ios_background", zh: "iOS 可能会暂停后台刷新。请允许通知和后台 App 刷新，普通模式会在下次打开时补上时间。", en: "iOS may suspend Background App Refresh. Allow notifications and Background App Refresh. Normal mode still catches up the next time you open the app." },
-    Row { key: "force_quit_help", zh: "如果系统结束了 App，这段时间不会响铃。下次打开会补上照顾，但不会补发错过的通知。", en: "If the system stops the app, alarms do not run until the next open. Care catches up then. Missed calls during that gap are not notified." },
-    Row { key: "long_absence", zh: "离开很久的话，同步可能需要一会儿。", en: "A long absence can take a moment to sync." },
     Row { key: "shelf_title", zh: "拓麻书架", en: "Tama Shelf" },
     Row { key: "tab_wallpaper", zh: "壁纸", en: "Wallpapers" },
     Row { key: "tab_food", zh: "食物", en: "Meals and snacks" },
@@ -150,8 +144,6 @@ const ROWS: &[Row] = &[
     Row { key: "guide_body", zh: "小屏模式：点按左、中、右操作。右上角按住约一秒可离开。", en: "Small screen: tap left, middle, and right. Hold the upper-right corner for about a second to leave." },
     // TODO(double-tap-wording): SPEC §7.2 names a double-tap hint and does not quote it.
     Row { key: "double_tap_hint", zh: "双击画面，或在设置中选择截取当前画面。", en: "Double-tap the LCD, or choose capture the current screen in Settings." },
-    Row { key: "residence_title", zh: "它在陪着你", en: "Keeping you company" },
-    Row { key: "residence_body", zh: "宠物正在陪你，并按真实时间成长。", en: "The pet is keeping you company and is growing in real time." },
     Row { key: "pause", zh: "暂停", en: "Pause" },
     Row { key: "resume_care", zh: "继续养育", en: "Resume care" },
     Row { key: "mixing_title", zh: "Mixing Meets", en: "Mixing Meets" },
@@ -199,11 +191,11 @@ const ROWS: &[Row] = &[
     Row { key: "help_controls_title", zh: "操作", en: "Controls" },
     Row { key: "help_controls_body", zh: "A 选择，B 确认，C 返回。支持同时按 A + C，也可使用键盘 A / S / D。游戏屏幕休眠时，按任意键唤醒。", en: "A selects, B confirms, C goes back. A and C can be held together. The keyboard uses A / S / D. Any key wakes the sleeping screen." },
     Row { key: "help_save_title", zh: "保存", en: "Saving" },
-    Row { key: "help_save_body", zh: "运行中每 30 秒自动保存，切到后台时也会保存。可在设置中立即保存、导出备份或导入同版本的存档。", en: "Progress is saved every 30 seconds, and again when the app goes to the background. Settings can save now, export a backup, or import a save from the same version." },
+    Row { key: "help_save_body", zh: "养育运行中每 30 秒自动保存，切到后台时也会保存。可在设置中立即保存、导出备份或导入同版本的存档。", en: "While care is running, progress is saved every 30 seconds, and again when the app goes to the background. Settings can save now, export a backup, or import a save from the same version." },
     Row { key: "help_care_title", zh: "养育模式与提醒", en: "Care and reminders" },
-    Row { key: "help_care_body", zh: "新用户默认开启后台驻留，升级保留原设置。关闭后台驻留即为普通模式：关闭程序后养育时间仍与现实时间同步，重新打开时同步离线成长。请允许通知。两种模式都会成长、消耗饱食度。自动唤醒并发出呼叫声时提醒，普通计时唤醒不提醒；五分钟内的重复呼叫合并。游戏内需保持声音开启；应用静音不影响检测。iOS 可能会暂停后台刷新，普通模式会在下次打开时补上时间。", en: "New installs keep background care on. An upgrade keeps the saved choice. Turning it off is normal mode: time still matches the wall clock while the app is closed, and growth catches up the next time you open it. Allow notifications. Both modes grow the pet and spend hunger. A wake that plays the call sound notifies. An ordinary timed wake does not. Repeat calls inside five minutes collapse into one. Leave the in-game sound on. App mute does not stop detection. iOS may suspend background refresh. Normal mode still catches up the next time you open the app." },
+    Row { key: "help_care_body", zh: "关闭程序后养育时间仍与现实时间同步，重新打开时补上离线成长。请允许通知。自动唤醒并发出呼叫声时提醒，普通计时唤醒不提醒；五分钟内的重复呼叫合并。游戏内需保持声音开启；应用静音不影响检测。", en: "While the app is closed, time still matches the wall clock, and growth catches up the next time you open it. Allow notifications. A wake that plays the call sound notifies; an ordinary timed wake does not. Repeat calls inside five minutes collapse into one. Leave the in-game sound on; app mute does not stop detection." },
     Row { key: "help_pause_title", zh: "暂停", en: "Pause" },
-    Row { key: "help_pause_body", zh: "设置里可以暂停养育。两种模式都停止成长和照料提醒，重新打开程序也保持暂停，玩具自己的时钟也一起停住。继续养育后不补算暂停时长，时钟会对齐回手机时间。后台驻留中断被检测到后自动切换为普通模式。系统结束 App 后，这段时间不会响铃，重新打开后恢复照顾。", en: "Settings can pause care. Both modes stop growth and care reminders, and pause stays if you reopen the app; the toy\'s own clock stops with it. Resuming does not make up the paused time, and the clock lines back up with the phone. If background care is interrupted, the app switches to normal mode. If the system stops the app, alarms do not run until the next open." },
+    Row { key: "help_pause_body", zh: "设置里可以暂停养育。暂停时养育停止成长和照料提醒，重新打开程序也保持暂停，玩具自己的时钟也一起停住。继续养育后不补算暂停时长，时钟会对齐回手机时间。系统结束 App 后，这段时间不会响铃，重新打开后恢复照顾。", en: "Settings can pause care. While paused, growth and care reminders stop, pause stays if you reopen the app, and the toy's own clock stops with it. Resuming does not make up the paused time, and the clock lines back up with the phone. If the system stops the app, alarms do not run until the next open." },
     Row { key: "help_look_title", zh: "外观", en: "Appearance" },
     Row { key: "help_look_body", zh: "可在设置中切换真机、极简与小屏模式，不影响游戏进度。小屏模式可轻触游戏画面的左、中、右三分之一操作 A、B、C。", en: "Settings can switch device, minimal, and small-screen mode without changing progress. In small-screen mode the left, middle, and right thirds of the picture are A, B, and C." },
     Row { key: "help_link_title", zh: "联机", en: "Linking" },
@@ -220,7 +212,6 @@ const ROWS: &[Row] = &[
     Row { key: "export_backup", zh: "导出存档", en: "Export save" },
     Row { key: "import_save", zh: "导入存档", en: "Import a save" },
     Row { key: "switch_rom", zh: "切换 ROM", en: "Switch ROM" },
-    Row { key: "residence_toggle", zh: "是否开启后台驻留", en: "Enable background residence" },
     Row { key: "dot_matrix_label", zh: "点阵屏幕", en: "LCD pixel grid" },
     Row { key: "key_haptics_label", zh: "按键震动", en: "Button vibration" },
     Row { key: "fast_keys_label", zh: "快速按键（实验）", en: "Faster buttons (experimental)" },
@@ -428,8 +419,6 @@ mod tests {
             "ble_name_fail",
             "ble_timeout",
             "ble_failed",
-            "care_restored",
-            "care_fallback",
             "food_sentence",
             "chest_sentence",
             "not_a_match",
@@ -454,13 +443,6 @@ mod tests {
         assert_eq!(text(Lang::En, "missing"), "");
         assert_eq!(text(Lang::Zh, "version"), "版本");
         assert_eq!(text(Lang::Zh, "ok"), "好");
-        assert_eq!(
-            localize(
-                Lang::Zh,
-                "enhanced mode restored; if you had paused, pause stays"
-            ),
-            "增强模式已恢复；如果你暂停过，暂停仍然有效"
-        );
         assert_eq!(
             localize(Lang::Zh, "save failed: disk full"),
             "保存失败：disk full"

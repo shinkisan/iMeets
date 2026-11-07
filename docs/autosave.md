@@ -15,7 +15,6 @@
 | 运行中每 30 秒 | `rust/shell/src/session.rs` 的 `pump`，`tick::AUTOSAVE_MS = 30_000` | 以 `last_save_ms` 计时，只在 pump 实际运行时生效 |
 | 补时（离开较久回来） | `pump` 的 catch-up 分支，`tick::CATCHUP_SAVE_MS = 10_000` | 补时过程中每 10 秒存一次，补完后再存一次 |
 | 切到后台 | `AppModel.scene(.background)` → `engine.saveNow()` | 进入后台时立即存，不依赖后台是否还在跑 |
-| 后台保活定时任务 | `AppModel` 注册的 `app.pocketmeets.ios.care`（BGProcessing） | iOS 决定何时执行，`earliestBeginDate` 为 60 秒后，不保证触发 |
 | 设置 → 立即保存 | `SettingsView` → `engine.saveNow()` | 手动，始终写入 |
 | 切换 ROM | `session.switch_to_image` 先 `save()` | 切换前存当前进度，各 ROM 分别保留 |
 | 连接结束（WebMeets 收礼/发送） | `WebMeetsView` 的 `saveNow()` | 连接成功完成后存 |
@@ -31,8 +30,17 @@
 
 1. `Engine.closeSession()` 会 `pm_save`，但 Swift 侧没有调用，退出 App 时不会额外存一次。
 2. 面对面（LAN）联机没有专门的存档点，只靠 30 秒自动存档。
-3. 模拟器上 BGTaskScheduler 任务不会自动触发，`app.pocketmeets.ios.care` 只能靠调试器模拟；模拟器测试时“后台存档”实际只来自切后台那一次 `saveNow()`。
-4. 帮助文案“运行中每 30 秒自动保存”在暂停养育时不成立，需要补充说明。
+
+## 后台任务
+
+以前注册过两个 `BGTaskScheduler` 任务（`app.pocketmeets.ios.refresh` 和
+`app.pocketmeets.ios.care`）。它们只写心跳、跑一个 6 小时看门狗、再存一次档，
+而 iOS 不保证执行时间；看门狗触发后也会在回前台时被立刻撤销，所以对养育没有
+实际作用。现已连同“后台驻留”开关、常驻通知、心跳和看门狗一起移除。
+
+后台养育现在只依赖：切后台时的一次存档、回前台补时，以及按预测时间排好的
+本地通知。`Info.plist` 只保留 `audio`（画中画）和 `bluetooth-peripheral`
+（WebMeets）两种后台模式。
 
 ## 模拟器验证
 

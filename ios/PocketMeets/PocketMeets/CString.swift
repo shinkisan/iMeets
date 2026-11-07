@@ -38,11 +38,7 @@ struct Prefs: Codable, Equatable {
     var key_haptics: Bool = true
     var muted: Bool = false
     var follow_system_sleep: Bool = false
-    var background_care: Bool = true
     var care_paused: Bool = false
-    var care_auto_resume: Bool = false
-    var care_fallback_notice: Bool = false
-    var care_resumed_notice: Bool = false
     var care_intro_version: Int = 0
     var notifications_requested: Bool = false
     var last_call_notification: Int64 = 0
