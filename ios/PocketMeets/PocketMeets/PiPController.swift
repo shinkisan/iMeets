@@ -36,6 +36,8 @@ final class PiPController: NSObject {
     private var timebase: CMTimebase?
     private var lastPts = CMTime.zero
     private var pool: CVPixelBufferPool?
+    private var cachedFrame: CVPixelBuffer?
+    private var frameDirty = true
     private var inBackground = false
     private var reportedFailure = false
     private(set) var isFeeding = false
@@ -166,6 +168,7 @@ final class PiPController: NSObject {
     /// A new LCD frame arrived. In the background this is what moves the
     /// floating window; the timer only covers a still screen and a stalled layer.
     func noteFrame() {
+        frameDirty = true
         guard isFeeding, inBackground else { return }
         render()
     }
@@ -179,6 +182,8 @@ final class PiPController: NSObject {
         isFeeding = false
         feed?.cancel()
         feed = nil
+        cachedFrame = nil
+        frameDirty = true
     }
 
     private func render() {
@@ -262,40 +267,44 @@ final class PiPController: NSObject {
 
     private func makeSample(pixels: [UInt32], asleep: Bool) -> CMSampleBuffer? {
         let side = lcd * cell
-        guard let buffer = pixelBuffer() else { return nil }
+        guard let buffer = (!frameDirty ? cachedFrame : nil) ?? pixelBuffer() else { return nil }
 
-        CVPixelBufferLockBaseAddress(buffer, [])
-        if let base = CVPixelBufferGetBaseAddress(buffer) {
-            let stride = CVPixelBufferGetBytesPerRow(buffer)
-            let bytes = base.assumingMemoryBound(to: UInt8.self)
-            if asleep {
-                for y in 0..<side {
-                    let row = bytes + y * stride
-                    for x in 0..<side {
-                        let p = row + x * 4
-                        p[0] = 0x2A; p[1] = 0x2B; p[2] = 0x29; p[3] = 0xFF
+        if frameDirty || cachedFrame == nil {
+            CVPixelBufferLockBaseAddress(buffer, [])
+            if let base = CVPixelBufferGetBaseAddress(buffer) {
+                let stride = CVPixelBufferGetBytesPerRow(buffer)
+                let bytes = base.assumingMemoryBound(to: UInt8.self)
+                if asleep {
+                    for y in 0..<side {
+                        let row = bytes + y * stride
+                        for x in 0..<side {
+                            let p = row + x * 4
+                            p[0] = 0x2A; p[1] = 0x2B; p[2] = 0x29; p[3] = 0xFF
+                        }
                     }
-                }
-            } else {
-                for y in 0..<lcd {
-                    for x in 0..<lcd {
-                        let index = y * lcd + x
-                        let argb = index < pixels.count ? pixels[index] : 0xFF00_0000
-                        let b = UInt8(argb & 0xFF)
-                        let g = UInt8((argb >> 8) & 0xFF)
-                        let r = UInt8((argb >> 16) & 0xFF)
-                        for sy in 0..<cell {
-                            let row = bytes + (y * cell + sy) * stride
-                            for sx in 0..<cell {
-                                let p = row + (x * cell + sx) * 4
-                                p[0] = b; p[1] = g; p[2] = r; p[3] = 0xFF
+                } else {
+                    for y in 0..<lcd {
+                        for x in 0..<lcd {
+                            let index = y * lcd + x
+                            let argb = index < pixels.count ? pixels[index] : 0xFF00_0000
+                            let b = UInt8(argb & 0xFF)
+                            let g = UInt8((argb >> 8) & 0xFF)
+                            let r = UInt8((argb >> 16) & 0xFF)
+                            for sy in 0..<cell {
+                                let row = bytes + (y * cell + sy) * stride
+                                for sx in 0..<cell {
+                                    let p = row + (x * cell + sx) * 4
+                                    p[0] = b; p[1] = g; p[2] = r; p[3] = 0xFF
+                                }
                             }
                         }
                     }
                 }
             }
+            CVPixelBufferUnlockBaseAddress(buffer, [])
+            cachedFrame = buffer
+            frameDirty = false
         }
-        CVPixelBufferUnlockBaseAddress(buffer, [])
 
         // Explicit color tags: the PiP renderer is stricter than the inline
         // layer and can show an empty frame without them.

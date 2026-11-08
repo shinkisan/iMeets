@@ -152,7 +152,7 @@ const ROWS: &[Row] = &[
     Row { key: "about_simple_body", zh: "iMeets 与任何 Bandai 官方产品无关，也未获 Bandai 认可。您需要从自己的设备中提取固件。", en: "iMeets is not affiliated with or endorsed by Bandai. You need to extract the firmware from your own device." },
     Row { key: "about_core_line", zh: "内核：nijiiro-egg（MIT）", en: "Core: nijiiro-egg (MIT)" },
     Row { key: "about_sibling_line", zh: "安卓上的姊妹项目：Open Meets", en: "Sister project on Android: Open Meets" },
-    Row { key: "about_body", zh: "iMeets 1.1（构建 10019）。这不是 Open Meets，也没有得到万代的认可或授权。固件需要你自己提供。", en: "iMeets 1.1 (build 10019). This is not Open Meets and is not endorsed by Bandai. Firmware is supplied by you." },
+    Row { key: "about_body", zh: "iMeets 1.2（构建 10020）。这不是 Open Meets，也没有得到万代的认可或授权。固件需要你自己提供。", en: "iMeets 1.2 (build 10020). This is not Open Meets and is not endorsed by Bandai. Firmware is supplied by you." },
     Row { key: "mit_notice", zh: "模拟器核心 tg18-emu（nijiiro-egg）以 MIT 许可证发布。Copyright (c) 2026 oreo-fox。", en: "The emulator core tg18-emu (nijiiro-egg) is MIT licensed. Copyright (c) 2026 oreo-fox." },
     Row { key: "fw_update_log", zh: "虚拟控制器不接受固件更新。", en: "the virtual controller does not accept firmware updates" },
     Row { key: "switch_starting", zh: "正在切换 ROM", en: "a switch is starting" },

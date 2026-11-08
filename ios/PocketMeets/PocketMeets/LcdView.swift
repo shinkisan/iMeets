@@ -1,7 +1,7 @@
 import SwiftUI
 import UIKit
 
-/// The 128×128 frame. Dot-matrix is a shader on top of a copy. Asleep is a flat fill.
+/// The 128×128 frame is uploaded as one bitmap and enlarged with nearest-neighbor sampling.
 struct LcdView: View {
     var pixels: [UInt32]
     var asleep: Bool
@@ -32,15 +32,15 @@ enum LcdBitmap {
                 ctx.fill(CGRect(x: 0, y: 0, width: side, height: side))
                 return
             }
+            guard let bitmap = bitmap(pixels) else { return }
+            let graphics = ctx.cgContext
+            graphics.saveGState()
+            graphics.translateBy(x: 0, y: side)
+            graphics.scaleBy(x: 1, y: -1)
+            graphics.interpolationQuality = .none
+            graphics.draw(bitmap, in: CGRect(x: 0, y: 0, width: side, height: side))
+            graphics.restoreGState()
             let cell = side / 128
-            for y in 0..<128 {
-                for x in 0..<128 {
-                    let index = y * 128 + x
-                    let argb = index < pixels.count ? pixels[index] : 0xFF000000
-                    color(argb).setFill()
-                    ctx.fill(CGRect(x: CGFloat(x) * cell, y: CGFloat(y) * cell, width: ceil(cell), height: ceil(cell)))
-                }
-            }
             guard dotMatrix, strength > 0 else { return }
             let gapV = CGFloat(0.21 * strength) * cell
             let gapH = CGFloat(0.18 * strength) * cell
@@ -58,11 +58,22 @@ enum LcdBitmap {
         }
     }
 
-    private static func color(_ argb: UInt32) -> UIColor {
-        let r = CGFloat((argb >> 16) & 0xFF) / 255
-        let g = CGFloat((argb >> 8) & 0xFF) / 255
-        let b = CGFloat(argb & 0xFF) / 255
-        return UIColor(red: r, green: g, blue: b, alpha: 1)
+    private static func bitmap(_ pixels: [UInt32]) -> CGImage? {
+        var rgba = [UInt8](repeating: 0, count: 128 * 128 * 4)
+        for i in 0..<(128 * 128) {
+            let argb = i < pixels.count ? pixels[i] : 0xFF000000
+            let offset = i * 4
+            rgba[offset] = UInt8((argb >> 16) & 0xFF)
+            rgba[offset + 1] = UInt8((argb >> 8) & 0xFF)
+            rgba[offset + 2] = UInt8(argb & 0xFF)
+            rgba[offset + 3] = 0xFF
+        }
+        let data = Data(rgba) as CFData
+        guard let provider = CGDataProvider(data: data) else { return nil }
+        return CGImage(width: 128, height: 128, bitsPerComponent: 8, bitsPerPixel: 32,
+                       bytesPerRow: 128 * 4, space: CGColorSpaceCreateDeviceRGB(),
+                       bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedLast.rawValue),
+                       provider: provider, decode: nil, shouldInterpolate: false, intent: .defaultIntent)
     }
 }
 

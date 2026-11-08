@@ -579,7 +579,7 @@ final class Engine {
         pump.lastCatchupSaveMs = output.last_catchup_save_ms
         if output.play_audio != 0, output.pcm_count > 0 {
             let count = min(Int(output.pcm_count), pcmBuffer.count)
-            audio.write(Array(pcmBuffer.prefix(count)), volume: output.volume)
+            audio.write(pcmBuffer, count: count, volume: output.volume)
         }
         // TODO(call-jingle): SPEC §14.15. Only firmware PCM is played. No 22050 Hz UI jingle is mixed in.
         if output.take_call != 0 {
@@ -815,15 +815,15 @@ private final class PcmPlayer {
         if !player.isPlaying { player.play() }
     }
 
-    func write(_ samples: [Int16], volume: Float) {
-        guard let format, !samples.isEmpty else { return }
+    func write(_ samples: [Int16], count: Int, volume: Float) {
+        guard let format, count > 0 else { return }
         if !engine.isRunning || !player.isPlaying { resume() }
         engine.mainMixerNode.outputVolume = volume
-        guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: AVAudioFrameCount(samples.count)) else { return }
-        buffer.frameLength = AVAudioFrameCount(samples.count)
+        guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: AVAudioFrameCount(count)) else { return }
+        buffer.frameLength = AVAudioFrameCount(count)
         samples.withUnsafeBufferPointer { source in
             guard let base = source.baseAddress, let dest = buffer.int16ChannelData?[0] else { return }
-            dest.update(from: base, count: samples.count)
+            dest.update(from: base, count: count)
         }
         player.scheduleBuffer(buffer, completionHandler: nil)
         if !player.isPlaying { player.play() }
