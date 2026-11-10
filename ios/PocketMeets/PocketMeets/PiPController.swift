@@ -41,6 +41,14 @@ final class PiPController: NSObject {
     private var inBackground = false
     private var reportedFailure = false
     private(set) var isFeeding = false
+    private(set) var returningFromPiP = false
+    var onPiPStopped: (() -> Void)?
+
+    /// Whether Picture in Picture is currently active or in the middle of
+    /// returning the user to the app.
+    var isActiveOrReturning: Bool {
+        returningFromPiP || (controller?.isPictureInPictureActive == true)
+    }
 
     override init() {
         super.init()
@@ -152,11 +160,15 @@ final class PiPController: NSObject {
         }
     }
 
-    func foregrounded() {
+    @discardableResult
+    func foregrounded() -> Bool {
+        let wasPiP = isActiveOrReturning
         inBackground = false
         if controller?.isPictureInPictureActive == true {
             controller?.stopPictureInPicture()
         }
+        returningFromPiP = false
+        return wasPiP
     }
 
     func stopPiP() {
@@ -390,7 +402,17 @@ extension PiPController: AVPictureInPictureControllerDelegate {
         render()
     }
 
-    func pictureInPictureControllerDidStopPictureInPicture(_ controller: AVPictureInPictureController) {}
+    func pictureInPictureController(
+        _ controller: AVPictureInPictureController,
+        restoreUserInterfaceForPictureInPictureStopWithCompletionHandler completionHandler: @escaping (Bool) -> Void
+    ) {
+        returningFromPiP = true
+        completionHandler(true)
+    }
+
+    func pictureInPictureControllerDidStopPictureInPicture(_ controller: AVPictureInPictureController) {
+        onPiPStopped?()
+    }
 }
 
 extension PiPController: AVPictureInPictureSampleBufferPlaybackDelegate {

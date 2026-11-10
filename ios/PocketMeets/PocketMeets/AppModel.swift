@@ -56,12 +56,24 @@ final class AppModel: ObservableObject {
     private var cameFromBackground = false
     private var backgroundedAt: Date?
     private var catchupProvisional = false
+    private var suppressCatchupUI = false
 
     init() {
         lan.engine = engine
         pip.frameProvider = { [weak self] in
             guard let self else { return ([], true) }
+            if !self.focused {
+                self.backgroundedAt = Date()
+            }
             return (self.pixels, self.asleep)
+        }
+        pip.onPiPStopped = { [weak self] in
+            Task { @MainActor in
+                guard let self else { return }
+                if !self.focused {
+                    self.backgroundedAt = Date()
+                }
+            }
         }
         lanCancel = lan.objectWillChange.sink { [weak self] _ in
             Task { @MainActor in
@@ -86,6 +98,7 @@ final class AppModel: ObservableObject {
         }
         engine.onCatchup = { [weak self] done, total in
             guard let self else { return }
+            if self.suppressCatchupUI { return }
             if total <= 0 {
                 self.catchupDone = nil
                 self.catchupTotal = 0
@@ -197,12 +210,20 @@ final class AppModel: ObservableObject {
     func scene(_ phase: ScenePhase) {
         switch phase {
         case .active:
-            pip.foregrounded()
+            let wasPiP = pip.foregrounded()
             engine.setPipFrames(false)
             focused = true
             let away = backgroundedAt.map { Date().timeIntervalSince($0) } ?? 0
             backgroundedAt = nil
-            if away > 30, !prefs.care_paused {
+            if wasPiP {
+                suppressCatchupUI = true
+                catchupProvisional = false
+                catchupDone = nil
+                catchupTotal = 0
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
+                    self?.suppressCatchupUI = false
+                }
+            } else if away > 30, !prefs.care_paused {
                 catchupProvisional = true
                 catchupDone = 0
                 catchupTotal = away
