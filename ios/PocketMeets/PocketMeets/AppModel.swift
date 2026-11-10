@@ -75,6 +75,15 @@ final class AppModel: ObservableObject {
                 }
             }
         }
+        pip.isPausedProvider = { [weak self] in
+            self?.prefs.care_paused ?? false
+        }
+        pip.onPlayPause = { [weak self] playing in
+            Task { @MainActor in
+                guard let self else { return }
+                self.setPaused(!playing, fromPiP: true)
+            }
+        }
         lanCancel = lan.objectWillChange.sink { [weak self] _ in
             Task { @MainActor in
                 guard let self else { return }
@@ -273,12 +282,12 @@ final class AppModel: ObservableObject {
         UserDefaults.standard.bool(forKey: "pm.pip") && hasSession && !prefs.care_paused
     }
 
-    func updatePiPEligibility() {
+    func updatePiPEligibility(stopIfUnwanted: Bool = true) {
         let wanted = pipWanted
         pip.isAutomaticAllowed = wanted
         if wanted {
             pip.startFeeding()
-        } else {
+        } else if stopIfUnwanted {
             pip.stopPiP()
         }
     }
@@ -406,11 +415,12 @@ final class AppModel: ObservableObject {
         }
     }
 
-    func setPaused(_ paused: Bool) {
+    func setPaused(_ paused: Bool, fromPiP: Bool = false) {
         if paused && lan.connected { return }
         engine.setPaused(paused)
         reload()
-        updatePiPEligibility()
+        updatePiPEligibility(stopIfUnwanted: !fromPiP)
+        pip.invalidatePlaybackState()
         if paused {
             UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: ["2"])
         }

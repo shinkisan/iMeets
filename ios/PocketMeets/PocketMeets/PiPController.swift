@@ -43,11 +43,18 @@ final class PiPController: NSObject {
     private(set) var isFeeding = false
     private(set) var returningFromPiP = false
     var onPiPStopped: (() -> Void)?
+    var onPlayPause: ((Bool) -> Void)?
+    var isPausedProvider: (() -> Bool)?
 
     /// Whether Picture in Picture is currently active or in the middle of
     /// returning the user to the app.
     var isActiveOrReturning: Bool {
         returningFromPiP || (controller?.isPictureInPictureActive == true)
+    }
+
+    /// Tells iOS to query `pictureInPictureControllerIsPlaybackPaused` and update controls.
+    func invalidatePlaybackState() {
+        controller?.invalidatePlaybackState()
     }
 
     override init() {
@@ -126,7 +133,9 @@ final class PiPController: NSObject {
         guard isAutomaticAllowed, controller != nil else { return }
         inBackground = true
         startFeeding()
-        ensureTimebaseRunning()
+        if isPausedProvider?() != true {
+            ensureTimebaseRunning()
+        }
         controller?.canStartPictureInPictureAutomaticallyFromInline = isAutomaticAllowed
         render()
         // Starting while the app is still in the foreground half of the
@@ -142,7 +151,9 @@ final class PiPController: NSObject {
         guard controller != nil else { return }
         inBackground = true
         startFeeding()
-        ensureTimebaseRunning()
+        if isPausedProvider?() != true {
+            ensureTimebaseRunning()
+        }
         controller?.canStartPictureInPictureAutomaticallyFromInline = true
         render()
         if controller?.isPictureInPicturePossible == true,
@@ -247,7 +258,9 @@ final class PiPController: NSObject {
                 layer.flush()
             }
         }
-        ensureTimebaseRunning()
+        if isPausedProvider?() != true {
+            ensureTimebaseRunning()
+        }
     }
 
     private func push(_ sample: CMSampleBuffer) {
@@ -393,12 +406,16 @@ final class PiPController: NSObject {
 
 extension PiPController: AVPictureInPictureControllerDelegate {
     func pictureInPictureControllerWillStartPictureInPicture(_ controller: AVPictureInPictureController) {
-        ensureTimebaseRunning()
+        if isPausedProvider?() != true {
+            ensureTimebaseRunning()
+        }
         render()
     }
 
     func pictureInPictureControllerDidStartPictureInPicture(_ controller: AVPictureInPictureController) {
-        ensureTimebaseRunning()
+        if isPausedProvider?() != true {
+            ensureTimebaseRunning()
+        }
         render()
     }
 
@@ -420,8 +437,13 @@ extension PiPController: AVPictureInPictureSampleBufferPlaybackDelegate {
         _ controller: AVPictureInPictureController,
         setPlaying playing: Bool
     ) {
-        // A rate of 0 leaves the window on the frame it opened with.
-        if playing { ensureTimebaseRunning() }
+        if playing {
+            anchorTimebase()
+        } else if let timebase {
+            CMTimebaseSetRate(timebase, rate: 0)
+        }
+        onPlayPause?(playing)
+        controller.invalidatePlaybackState()
     }
 
     func pictureInPictureControllerTimeRangeForPlayback(
@@ -433,7 +455,7 @@ extension PiPController: AVPictureInPictureSampleBufferPlaybackDelegate {
     func pictureInPictureControllerIsPlaybackPaused(
         _ controller: AVPictureInPictureController
     ) -> Bool {
-        false
+        isPausedProvider?() ?? false
     }
 
     func pictureInPictureController(
