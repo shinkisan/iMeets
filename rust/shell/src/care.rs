@@ -10,6 +10,9 @@ pub struct CareTimeline {
     pub paused: bool,
     #[serde(default)]
     pub pause_started: Option<f64>,
+    /// Persist until a resumed Sweets session has live SRAM to repair its age cache.
+    #[serde(default)]
+    pub age_refresh_pending: bool,
 }
 
 impl CareTimeline {
@@ -18,6 +21,7 @@ impl CareTimeline {
             care_at: now,
             paused: false,
             pause_started: None,
+            age_refresh_pending: false,
         }
     }
 

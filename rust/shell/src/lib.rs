@@ -3,6 +3,7 @@
 //!
 //! The C ABI is not thread-safe. Call it from one serial queue.
 
+mod age;
 pub mod appearance;
 pub mod care;
 pub mod control;

@@ -115,6 +115,8 @@ pub struct Session {
     pub notice: String,
     pub stopped: bool,
     pub playable: bool,
+    age_profile: Option<crate::age::AgeProfile>,
+    age_refresh_ready_at: Option<f64>,
     pub link: Link,
     pub care: CareTimeline,
     pub keys: [bool; 3],
@@ -171,6 +173,7 @@ impl Session {
         playable: bool,
     ) -> Self {
         machine.stop_on_bluetooth = true;
+        let age_profile = crate::age::AgeProfile::for_image(&image);
         Self {
             machine,
             image,
@@ -182,6 +185,8 @@ impl Session {
             notice: String::new(),
             stopped: false,
             playable,
+            age_profile,
+            age_refresh_ready_at: None,
             link: Link::default(),
             care: CareTimeline::at(0.0),
             keys: [false; 3],
@@ -272,12 +277,17 @@ impl Session {
         let stored = CareTimeline::load(&session.save_dir);
         let had = session.save_dir.join("care.json").exists();
         session.care = if had { stored } else { CareTimeline::at(now) };
+        let resuming = session.care.paused && !paused;
         if paused {
             session.care.set_paused(true, now);
         } else if session.care.paused {
             session.care.set_paused(false, now);
         }
-        session.align_clock_for_open(now);
+        if resuming {
+            session.resume_clock_to(tg18::rtc_seconds_now());
+        } else {
+            session.align_clock_for_open(now);
+        }
         let _ = session.care.store(&session.save_dir);
         if session.save_dir.join("link-pending").exists() {
             let back = session.save_dir.join("mixing-return.t18s");
@@ -324,7 +334,10 @@ impl Session {
     /// Re-base the RTC on the phone clock. Used while the toy is being played
     /// normally; the catch-up replay must not be re-based or it would jump.
     fn sync_clock_to_wall(&mut self) {
-        let wall = tg18::rtc_seconds_now();
+        self.sync_clock_to(tg18::rtc_seconds_now());
+    }
+
+    fn sync_clock_to(&mut self, wall: f64) {
         self.machine.sys.rtc.base_ticks = (wall * 32768.0) as i64;
         self.machine.sys.rtc.base_time = self.machine.sys.game_time;
         // The RTC chip only feeds what is drawn; the game's own clock - the
@@ -332,6 +345,44 @@ impl Session {
         // both, or resuming a pause leaves the pet on the frozen schedule.
         self.machine.sys.rtc_irq.tod_base = (wall as i64).rem_euclid(86_400);
         self.machine.sys.rtc_irq.tod_set_at = self.machine.sys.game_time;
+    }
+
+    fn resume_clock_to(&mut self, wall: f64) {
+        let before = self.machine.sys.rtc.ticks(self.machine.sys.game_time) as f64 / 32768.0;
+        if self.age_profile.is_some() && crate::age::crossed_midnight(before, wall) {
+            self.care.age_refresh_pending = true;
+            self.age_refresh_ready_at = None;
+        }
+        self.sync_clock_to(wall);
+    }
+
+    fn refresh_resumed_age(&mut self) {
+        if !self.care.age_refresh_pending || self.care.paused || self.catching_up
+            || self.stopped || self.control_paused || self.switching {
+            return;
+        }
+        let Some(profile) = self.age_profile else { return };
+        if self.machine.sys.powered_off {
+            self.age_refresh_ready_at = None;
+            return;
+        }
+        // Let cold-boot SRAM reconstruction finish before touching live parameters.
+        let now = self.machine.now();
+        let ready = *self.age_refresh_ready_at.get_or_insert(now + 2.0);
+        if now < ready {
+            return;
+        }
+        let Some(_) = profile.refresh(&mut self.machine.sys.sram) else { return };
+        self.care.age_refresh_pending = false;
+        self.age_refresh_ready_at = None;
+        if !self.save_dir.as_os_str().is_empty() {
+            // Save corrected SRAM as well as care metadata, so an immediate reopen
+            // cannot restore an old snapshot after the pending flag was cleared.
+            // Also save when the firmware already refreshed A during warm-up.
+            if self.save().is_err() {
+                self.care.age_refresh_pending = true;
+            }
+        }
     }
 
     /// The translation table and the fast-key patch are written against the
@@ -371,7 +422,7 @@ impl Session {
         if was_paused && !paused {
             // Resuming puts the toy back on the phone's clock. The paused gap
             // itself is still never replayed.
-            self.sync_clock_to_wall();
+            self.resume_clock_to(tg18::rtc_seconds_now());
         }
         if paused {
             let _ = self.save();
@@ -491,10 +542,12 @@ impl Session {
             self.machine.run_with_sleep(limit)
         };
         self.ingest_pending_audio();
-        match outcome {
+        let code = match outcome {
             Outcome::Limit | Outcome::PowerOff => 0,
             other => self.on_link_stop(other),
-        }
+        };
+        if code >= 0 { self.refresh_resumed_age(); }
+        code
     }
 
     /// Desktop tick while `powered_off`: cold-boot on the next scripted press
@@ -1822,5 +1875,148 @@ mod tests {
         s.set_fast_keys(true);
         assert!(s.fast_keys);
         assert!((s.min_hold - MIN_HOLD_FAST).abs() < 1e-9);
+    }
+}
+
+#[cfg(test)]
+mod age_resume_tests {
+    use super::*;
+
+    fn seed(s: &mut Session) {
+        s.age_profile = Some(crate::age::AgeProfile);
+        let p = &mut s.machine.sys.sram[0xd834..0xd900];
+        p[0x52] = 4;
+        p[0x1c..0x20].copy_from_slice(&4513u32.to_le_bytes());
+        p[0x36..0x38].copy_from_slice(&3u16.to_le_bytes());
+    }
+
+    fn age(s: &Session) -> u16 {
+        u16::from_le_bytes(s.machine.sys.sram[0xd86a..0xd86c].try_into().unwrap())
+    }
+
+    #[test]
+    fn pending_repair_waits_for_resume_and_live_sram() {
+        let mut s = Session::bare(vec![0; 0x1000]);
+        seed(&mut s);
+        s.care.age_refresh_pending = true;
+        s.care.paused = true;
+        s.refresh_resumed_age();
+        assert!(s.age_refresh_ready_at.is_none());
+        s.care.paused = false;
+        s.machine.sys.powered_off = true;
+        s.refresh_resumed_age();
+        assert_eq!(age(&s), 3);
+        assert!(s.care.age_refresh_pending);
+        s.machine.sys.powered_off = false;
+        s.refresh_resumed_age();
+        assert_eq!(age(&s), 3);
+        s.machine.executed += (3.0 * CPU_HZ) as u64;
+        let before = s.machine.sys.sram.clone();
+        s.refresh_resumed_age();
+        assert_eq!(age(&s), 4);
+        assert!(!s.care.age_refresh_pending);
+        assert_eq!(&s.machine.sys.sram[..0xd86a], &before[..0xd86a]);
+        assert_eq!(&s.machine.sys.sram[0xd86c..], &before[0xd86c..]);
+    }
+
+    #[test]
+    fn same_day_resume_does_not_queue_or_change_age() {
+        let mut s = Session::bare(vec![0; 0x1000]);
+        seed(&mut s);
+        s.sync_clock_to(10.0 * 3600.0);
+        s.resume_clock_to(20.0 * 3600.0);
+        assert!(!s.care.age_refresh_pending);
+        assert_eq!(age(&s), 3);
+    }
+
+    // Optional private integration fixtures: no ROM/save assets enter the repo.
+    fn fixture() -> Option<(PathBuf, PathBuf)> {
+        let dir = PathBuf::from(std::env::var("POCKET_MEETS_AGE_FIXTURES").ok()?);
+        Some((dir.join("sweets.bin"), dir.join("room.t18s")))
+    }
+
+    #[test]
+    fn real_firmware_resume_keeps_growth_and_repairs_only_the_cache() {
+        let Some((rom, snapshot)) = fixture() else { return };
+        let mut s = Session::bare(fs::read(&rom).unwrap());
+        assert!(s.age_profile.is_some());
+        Snapshot::load(snapshot.to_str().unwrap()).unwrap().restore(&mut s.machine).unwrap();
+        s.playable = true;
+        let growth = s.machine.sys.sram[0xd850..0xd854].to_vec();
+        let executed = s.machine.executed;
+        assert_eq!(age(&s), 3);
+        s.sync_clock_to(tg18::rtc_seconds_now() - 86_400.0);
+        s.care.set_paused(true, tg18::unix_now());
+        s.care_pause(false, tg18::unix_now());
+        assert_eq!(s.machine.executed, executed, "resume itself must not replay time");
+        assert!(s.care.age_refresh_pending);
+        s.display_awake(true);
+        for _ in 0..160 {
+            assert_eq!(s.step(0.02), 0, "{}", s.error);
+        }
+        assert_eq!(age(&s), 4);
+        assert_eq!(&s.machine.sys.sram[0xd850..0xd854], &growth);
+        assert!(!s.care.age_refresh_pending);
+    }
+
+    #[test]
+    fn real_deep_sleep_resume_repairs_after_cold_boot() {
+        let Some((rom, _)) = fixture() else { return };
+        let Ok(path) = std::env::var("POCKET_MEETS_AGE_SLEEP_SNAPSHOT") else { return };
+        let mut s = Session::bare(fs::read(rom).unwrap());
+        Snapshot::load(&path).unwrap().restore(&mut s.machine).unwrap();
+        assert!(s.machine.sys.powered_off);
+        s.playable = true;
+        let growth = s.machine.sys.sram[0xd850..0xd854].to_vec();
+        s.sync_clock_to(tg18::rtc_seconds_now() - 86_400.0);
+        s.care.set_paused(true, tg18::unix_now());
+        s.care_pause(false, tg18::unix_now());
+        assert_eq!(age(&s), 3);
+        assert!(s.care.age_refresh_pending);
+        s.refresh_resumed_age();
+        assert_eq!(age(&s), 3);
+        s.display_awake(true);
+        for _ in 0..400 {
+            assert_eq!(s.step(0.02), 0, "{}", s.error);
+        }
+        assert!(!s.machine.sys.powered_off);
+        assert_eq!(age(&s), 4);
+        assert_eq!(&s.machine.sys.sram[0xd850..0xd854], &growth);
+        assert!(!s.care.age_refresh_pending);
+    }
+
+    #[test]
+    fn real_saved_pause_survives_quit_before_repair_and_persists_after_repair() {
+        let Some((rom, snapshot)) = fixture() else { return };
+        let root = crate::tmpdir("age_resume");
+        let saves = root.join("Saves");
+        let mut s = Session::bare(fs::read(&rom).unwrap());
+        Snapshot::load(snapshot.to_str().unwrap()).unwrap().restore(&mut s.machine).unwrap();
+        s.playable = true;
+        s.root = root.clone();
+        s.save_dir = saves.join("fw_tg18_jp_v062_2019-09-12_sweets");
+        s.sync_clock_to(tg18::rtc_seconds_now() - 86_400.0);
+        s.care_pause(true, tg18::unix_now());
+        drop(s);
+        let reopened = Session::open_care(&rom, &saves, false).unwrap();
+        assert!(reopened.care.age_refresh_pending);
+        assert_eq!(age(&reopened), 3);
+        drop(reopened); // Quit immediately, before a single firmware step.
+        let mut retry = Session::open_care(&rom, &saves, false).unwrap();
+        assert!(retry.care.age_refresh_pending);
+        retry.display_awake(true);
+        for _ in 0..160 {
+            assert_eq!(retry.step(0.02), 0, "{}", retry.error);
+        }
+        assert_eq!(age(&retry), 4);
+        assert!(!retry.care.age_refresh_pending);
+        let growth = retry.machine.sys.sram[0xd850..0xd854].to_vec();
+        drop(retry);
+        let loaded = Session::open_care(&rom, &saves, false).unwrap();
+        assert_eq!(age(&loaded), 4);
+        assert_eq!(&loaded.machine.sys.sram[0xd850..0xd854], &growth);
+        assert!(!loaded.care.age_refresh_pending);
+        drop(loaded);
+        fs::remove_dir_all(root).unwrap();
     }
 }
