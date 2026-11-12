@@ -65,9 +65,14 @@ xcrun simctl create "iMeets B" com.apple.CoreSimulator.SimDeviceType.iPhone-16 c
 - 真机与模拟器之间、两台真机之间使用同一套 TCP + tick barrier；
 - 面对面联机连接成功建立时会自动保存一次进度；
 
-## 实机联机诊断（build 10021 / lan-trace-v1）
+## 实机联机诊断（build 10023 起默认关闭 / lan-trace-v1）
 
-点 Host 或 Join 时自动开始本地诊断，不需要 Xcode 附加或额外启动参数。
+默认不记录联机诊断日志，也不进行相关 UART 字符串格式化、状态/屏幕采样和耗时统计。
+需要排查时，显式添加启动参数 `-pmLanTrace`，再点 Host 或 Join 开始记录。
+该开关只影响本次进程，不存入用户设置；普通重新启动会恢复关闭。
+关闭不会删除之前的日志；`lan-payload.txt` 连接信息仍保留，供已有自动连接流程使用。
+例如 Simulator：`xcrun simctl launch <UDID> app.pocketmeets.ios -pmLanHost -pmLanTrace`。
+真机可在 Xcode 的 Scheme → Run → Arguments 添加 `-pmLanTrace` 后运行。
 每次尝试生成独立 JSONL 文件，存在 App 容器的 `Documents/LanDiagnostics/`。
 日志包含本次角色、安装标识、版本、墙钟/单调时钟、按键、UART 原始字节、
 网络状态、tick 等待和超时，以及每秒一次的固件时间、UART 队列、IR 状态和屏幕文字。

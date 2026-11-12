@@ -159,11 +159,12 @@ final class Engine {
     }
 
     func key(_ index: Int, down: Bool) {
-        let requested = ProcessInfo.processInfo.systemUptime
+        let trace = LanDiagnostics.shared.active
+        let requested = trace ? ProcessInfo.processInfo.systemUptime : 0
         queue.sync {
             guard let session else { return }
             let result = pm_key(session, Int32(index), down ? 1 : 0)
-            if LanDiagnostics.shared.active {
+            if trace {
                 LanDiagnostics.shared.record("key", ["index": index, "down": down, "result": result,
                     "sim_s": pm_seconds(session), "requested_uptime_s": requested,
                     "queue_wait_ms": (ProcessInfo.processInfo.systemUptime - requested) * 1000])
@@ -430,26 +431,28 @@ final class Engine {
 
     /// Feed bytes received from the app-side infrared transport.
     func irWrite(_ bytes: [UInt8]) {
-        let requested = ProcessInfo.processInfo.systemUptime
+        let trace = LanDiagnostics.shared.active
+        let requested = trace ? ProcessInfo.processInfo.systemUptime : 0
         queue.sync {
             guard let session, !bytes.isEmpty else { return }
-            let wait = (ProcessInfo.processInfo.systemUptime - requested) * 1000
+            let wait = trace ? (ProcessInfo.processInfo.systemUptime - requested) * 1000 : 0
             var result: Int32 = -1
             bytes.withUnsafeBufferPointer { raw in
                 if let base = raw.baseAddress {
                     result = pm_ir_write(session, base, Int32(bytes.count))
                 }
             }
-            traceIr("uart_rx", bytes: bytes, session: session, waitMs: wait, result: result)
+            if trace { traceIr("uart_rx", bytes: bytes, session: session, waitMs: wait, result: result) }
         }
     }
 
     /// Drain firmware infrared output for the app-side transport.
     func irRead() -> [UInt8] {
-        let requested = ProcessInfo.processInfo.systemUptime
+        let trace = LanDiagnostics.shared.active
+        let requested = trace ? ProcessInfo.processInfo.systemUptime : 0
         return queue.sync {
             guard let session else { return [] }
-            let wait = (ProcessInfo.processInfo.systemUptime - requested) * 1000
+            let wait = trace ? (ProcessInfo.processInfo.systemUptime - requested) * 1000 : 0
             var buffer = [UInt8](repeating: 0, count: 512)
             let n = buffer.withUnsafeMutableBufferPointer { raw -> Int32 in
                 guard let base = raw.baseAddress else { return 0 }
@@ -457,7 +460,7 @@ final class Engine {
             }
             if n <= 0 { return [] }
             let bytes = Array(buffer.prefix(Int(n)))
-            traceIr("uart_tx", bytes: bytes, session: session, waitMs: wait, result: n)
+            if trace { traceIr("uart_tx", bytes: bytes, session: session, waitMs: wait, result: n) }
             return bytes
         }
     }
@@ -471,6 +474,7 @@ final class Engine {
     }
 
     func traceLanState(_ event: String) {
+        guard LanDiagnostics.shared.active else { return }
         queue.sync { traceLanStateUnlocked(event) }
     }
 
@@ -594,7 +598,7 @@ final class Engine {
         lastTick = now
         let trace = LanDiagnostics.shared.active
         let simBefore = trace ? pm_seconds(session) : 0
-        let pumpStart = ProcessInfo.processInfo.systemUptime
+        let pumpStart = trace ? ProcessInfo.processInfo.systemUptime : 0
         let prefs = reloadUnlocked()
         var input = PmPumpIn()
         input.now_unix = Date().timeIntervalSince1970

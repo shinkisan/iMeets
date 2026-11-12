@@ -3,10 +3,16 @@ import OSLog
 import UIKit
 
 /// Local, bounded JSONL traces. File IO never runs on the firmware/network queues.
-/// A trace starts automatically when hosting or joining; no launch flag is needed.
+/// Disabled by default. Explicitly launch with -pmLanTrace to record a session.
 final class LanDiagnostics {
     static let shared = LanDiagnostics()
     static let revision = "lan-trace-v1"
+    static let enabled = ProcessInfo.processInfo.arguments.contains("-pmLanTrace")
+
+    static func console(_ message: @autoclosure () -> String) {
+        guard enabled else { return }
+        print(message())
+    }
 
     private let lock = NSLock()
     private let writer = DispatchQueue(label: "pm.lan.diagnostics", qos: .utility)
@@ -23,12 +29,14 @@ final class LanDiagnostics {
     private var observers: [NSObjectProtocol] = []
 
     var active: Bool {
+        guard Self.enabled else { return false }
         lock.lock()
         defer { lock.unlock() }
         return run != nil
     }
 
     private init() {
+        guard Self.enabled else { return }
         for name in [UIApplication.willResignActiveNotification,
                      UIApplication.didEnterBackgroundNotification,
                      UIApplication.didBecomeActiveNotification,
@@ -41,6 +49,7 @@ final class LanDiagnostics {
 
     /// Called on main by LanLink. Each device/run gets its own correlation ID.
     func start(role: String) {
+        guard Self.enabled else { return }
         let defaults = UserDefaults.standard
         let installKey = "pm.lanDiagnosticInstallID"
         let install = defaults.string(forKey: installKey) ?? UUID().uuidString
@@ -79,7 +88,9 @@ final class LanDiagnostics {
         lock.unlock()
     }
 
-    func record(_ event: String, _ fields: [String: Any] = [:]) {
+    func record(_ event: String, _ fields: @autoclosure () -> [String: Any] = [:]) {
+        guard Self.enabled else { return }
+        let fields = fields()
         lock.lock()
         defer { lock.unlock() }
         guard run != nil else { return }
@@ -89,6 +100,7 @@ final class LanDiagnostics {
     }
 
     func finish(_ reason: String) {
+        guard Self.enabled else { return }
         lock.lock()
         defer { lock.unlock() }
         guard run != nil else { return }

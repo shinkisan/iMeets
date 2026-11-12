@@ -49,7 +49,7 @@ final class LanLink: ObservableObject {
         LanDiagnostics.shared.start(role: "host")
         engine?.traceLanState("host_start")
         mode = .hosting
-        print("LAN host start")
+        LanDiagnostics.console("LAN host start")
         do {
             let listener = try NWListener(using: .tcp, on: .any)
             self.listener = listener
@@ -92,11 +92,11 @@ final class LanLink: ObservableObject {
         LanDiagnostics.shared.start(role: "join")
         engine?.traceLanState("join_start")
         guard let parsed = Self.parse(payload) else {
-            print("LAN join invalid payload")
+            LanDiagnostics.console("LAN join invalid payload")
             fail("二维码无效")
             return
         }
-        print("LAN join hosts=\(parsed.hosts) port=\(parsed.port)")
+        LanDiagnostics.console("LAN join hosts=\(parsed.hosts) port=\(parsed.port)")
         hosts = parsed.hosts
         LanDiagnostics.shared.record("join_targets", ["hosts": parsed.hosts, "port": parsed.port])
         port = parsed.port
@@ -163,7 +163,7 @@ final class LanLink: ObservableObject {
             if useWifi {
                 useWifi = false
                 nextHost = 0
-                print("LAN retry without interface binding")
+                LanDiagnostics.console("LAN retry without interface binding")
                 connectNext()
                 return
             }
@@ -172,7 +172,7 @@ final class LanLink: ObservableObject {
         }
         let host = hosts[nextHost]
         nextHost += 1
-        print("LAN try \(host):\(port) wifi=\(useWifi)")
+        LanDiagnostics.console("LAN try \(host):\(port) wifi=\(useWifi)")
         LanDiagnostics.shared.record("connect_attempt", ["host": host, "port": port, "wifi": useWifi])
         guard let nwPort = NWEndpoint.Port(rawValue: port) else {
             fail("端口无效")
@@ -191,11 +191,11 @@ final class LanLink: ObservableObject {
             LanDiagnostics.shared.record("connection_state", ["state": String(describing: state), "host": host])
             switch state {
             case .ready:
-                print("LAN connected")
+                LanDiagnostics.console("LAN connected")
                 self.cancelConnectTimeout()
                 Task { @MainActor in self.begin() }
             case .failed(let error):
-                print("LAN connect failed \(host): \(error.localizedDescription)")
+                LanDiagnostics.console("LAN connect failed \(host): \(error.localizedDescription)")
                 self.cancelConnectTimeout()
                 Task { @MainActor in
                     self.failure = error.localizedDescription
@@ -211,7 +211,7 @@ final class LanLink: ObservableObject {
         // can take over a minute to fail; give each host a short window.
         let work = DispatchWorkItem { [weak self] in
             guard let self, self.mode == .joining, !self.started else { return }
-            print("LAN timeout \(host)")
+            LanDiagnostics.console("LAN timeout \(host)")
             LanDiagnostics.shared.record("connect_timeout", ["host": host])
             self.failure = "连接超时"
             self.connection?.cancel()
@@ -244,16 +244,20 @@ final class LanLink: ObservableObject {
 
     private func step() {
         guard running, let conn = connection else { return }
-        let start = ProcessInfo.processInfo.systemUptime
-        let interval = lastTransportTick == 0 ? 0 : (start - lastTransportTick) * 1000
-        lastTransportTick = start
-        txTicks &+= 1
+        let trace = LanDiagnostics.shared.active
+        let start = trace ? ProcessInfo.processInfo.systemUptime : 0
+        let interval = trace && lastTransportTick != 0 ? (start - lastTransportTick) * 1000 : 0
+        if trace {
+            lastTransportTick = start
+            txTicks &+= 1
+        }
         if let out = engine?.irRead(), !out.isEmpty {
             send(conn, type: 0, data: out)
         }
         send(conn, type: 1, data: [])
-        let waitStart = ProcessInfo.processInfo.systemUptime
+        let waitStart = trace ? ProcessInfo.processInfo.systemUptime : 0
         let result = tick.wait(timeout: .now() + 2.0)
+        guard trace else { return }
         let waitMs = (ProcessInfo.processInfo.systemUptime - waitStart) * 1000
         if txTicks % 50 == 0 || result == .timedOut || waitMs > 100 || interval > 100 {
             LanDiagnostics.shared.record("transport_tick", ["tx_tick": txTicks,
@@ -308,9 +312,11 @@ final class LanLink: ObservableObject {
             if type == 0 {
                 engine?.irWrite(body)
             } else if type == 1 {
-                rxTicks &+= 1
-                if rxTicks % 50 == 0 {
-                    LanDiagnostics.shared.record("peer_tick", ["rx_tick": rxTicks, "buffered_bytes": rx.count])
+                if LanDiagnostics.shared.active {
+                    rxTicks &+= 1
+                    if rxTicks % 50 == 0 {
+                        LanDiagnostics.shared.record("peer_tick", ["rx_tick": rxTicks, "buffered_bytes": rx.count])
+                    }
                 }
                 tick.signal()
             } else {
@@ -320,7 +326,7 @@ final class LanLink: ObservableObject {
     }
 
     private func fail(_ message: String) {
-        print("LAN fail: \(message)")
+        LanDiagnostics.console("LAN fail: \(message)")
         LanDiagnostics.shared.record("failure", ["message": message])
         engine?.traceLanState("failure_state")
         LanDiagnostics.shared.finish("failure")
@@ -343,7 +349,7 @@ final class LanLink: ObservableObject {
         let code = String(format: "%06d", Int.random(in: 0..<1_000_000))
         let hosts = localIPs().joined(separator: ",")
         let text = "tama://join?v=1&h=\(hosts)&p=\(port)&t=\(token)&c=\(code)"
-        print("LAN PAYLOAD \(text)")
+        LanDiagnostics.console("LAN PAYLOAD \(text)")
         return text
     }
 
