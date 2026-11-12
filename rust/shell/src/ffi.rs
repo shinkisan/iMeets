@@ -627,6 +627,49 @@ pub extern "C" fn pm_ir_read(p: *mut Session, out: *mut u8, cap: i32) -> i32 {
     s.ir_read(slice)
 }
 
+/// Read-only diagnostics. Never read UART data registers: those drain RX.
+#[no_mangle]
+pub extern "C" fn pm_ir_diagnostics(p: *mut Session) -> *mut c_char {
+    let Some(s) = session(p) else { return owned("{}") };
+    let sys = &s.machine.sys;
+    let ctrl = u32::from_le_bytes(sys.uart[8..12].try_into().unwrap());
+    let firmware = if s.is_sweets() {
+        // Verified Sweets v062 IR context; do not interpret other ROM layouts.
+        let word = |offset: usize| {
+            sys.sram.get(offset..offset + 4)
+                .map(|b| u32::from_le_bytes(b.try_into().unwrap()))
+        };
+        let context = word(0x11a58).unwrap_or(0);
+        let offset = context.checked_sub(0xf8000000).map(|v| v as usize);
+        offset.filter(|&o| o + 0x4b8 <= sys.sram.len()).map(|o| json!({
+            "context": context,
+            "rx_count": word(o + 0x0c),
+            "rx_flags": sys.sram[o + 0x18],
+            "parser": word(o + 0x1c),
+            "link_state": word(o + 0x4b4),
+            "events": &sys.sram[0x11a54..0x11a57],
+        }))
+    } else { None };
+    owned(json!({
+        "rom": s.stem,
+        "sim_s": s.seconds(),
+        "pc": s.machine.cpu.pc(),
+        "powered_off": sys.powered_off,
+        "paused": s.care.paused,
+        "control_paused": s.control_paused,
+        "catching_up": s.catching_up,
+        "stopped": s.stopped,
+        "uart_ctrl": ctrl,
+        "uart_rx_queued": sys.uart_rx.len(),
+        "uart_tx_queued": sys.uart_tx.len(),
+        "ir_pending": s.ir_pending.len(),
+        "uart_last_tx_s": sys.uart_tx_last,
+        "uart_next_irq_s": sys.uart_tx_next,
+        "infrared_used": sys.infrared_used,
+        "firmware": firmware,
+    }).to_string())
+}
+
 #[no_mangle]
 pub extern "C" fn pm_care_sync(p: *mut Session, now: f64, budget: f64) -> f64 {
     session(p).map(|s| s.care_sync(now, budget)).unwrap_or(-1.0)
@@ -1182,6 +1225,38 @@ pub extern "C" fn pm_alarm_exact(allowed: i32) -> *mut c_char {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+
+    #[test]
+    fn ir_diagnostics_does_not_consume_bytes_or_advance_firmware() {
+        let mut s = Session::bare(vec![0; 8 * 1024 * 1024]);
+        s.stem = "fw_tg18_jp_v062_2019-09-12_sweets".into();
+        s.machine.sys.sram[0x11a58..0x11a5c].copy_from_slice(&0xf8011a5cu32.to_le_bytes());
+        s.machine.sys.sram[0x11a5c + 0x4b4..0x11a5c + 0x4b8].copy_from_slice(&2u32.to_le_bytes());
+        s.machine.sys.uart_rx.extend([0xc0, 0xfe, 0xc1]);
+        s.machine.sys.uart_tx.extend([0xff, 0xc0]);
+        s.ir_pending.push_back(0x7d);
+        let cycles = s.machine.executed;
+        let read = |s: &mut Session| {
+            let p = pm_ir_diagnostics(s);
+            let value: Value = serde_json::from_str(unsafe { CStr::from_ptr(p) }.to_str().unwrap()).unwrap();
+            pm_string_free(p);
+            value
+        };
+        let state = read(&mut s);
+        assert_eq!(state["firmware"]["link_state"], 2);
+        assert_eq!(state["uart_rx_queued"], 3);
+        assert_eq!(s.machine.sys.uart_rx.iter().copied().collect::<Vec<_>>(), [0xc0, 0xfe, 0xc1]);
+        assert_eq!(s.machine.sys.uart_tx.iter().copied().collect::<Vec<_>>(), [0xff, 0xc0]);
+        assert_eq!(s.ir_pending.front(), Some(&0x7d));
+        assert_eq!(s.machine.executed, cycles);
+        // An uninitialised context and other ROM layouts must be left uninterpreted.
+        s.machine.sys.sram[0x11a58..0x11a5c].fill(0);
+        assert!(read(&mut s)["firmware"].is_null());
+        s.stem = "other".into();
+        assert!(read(&mut s)["firmware"].is_null());
+    }
+
     #[test]
     fn header_lists_the_gatt_numbers() {
         let header = include_str!("../include/pocket_meets.h");

@@ -150,6 +150,8 @@ int pm_link_read(PmSession *s, unsigned char *out, int cap);
 
 int pm_ir_write(PmSession *s, const unsigned char *bytes, int len);
 int pm_ir_read(PmSession *s, unsigned char *out, int cap);
+/* Read-only JSON; caller releases with pm_string_free. Does not drain UART. */
+char *pm_ir_diagnostics(PmSession *s);
 
 double pm_care_sync(PmSession *s, double now_unix, double budget);
 double pm_care_at(PmSession *s);

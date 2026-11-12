@@ -21,6 +21,7 @@ final class Engine {
     private var pcmBuffer = [Int16](repeating: 0, count: 44_100 / 5)
     /// True while any shell key is held; keeps the tick short for response.
     private var holdingKeys = false
+    private var lastLanSample: CFAbsoluteTime = 0
     var onFrame: (([UInt32], Bool) -> Void)?
     var onNotice: ((String) -> Void)?
     var onStopped: ((String) -> Void)?
@@ -158,9 +159,15 @@ final class Engine {
     }
 
     func key(_ index: Int, down: Bool) {
+        let requested = ProcessInfo.processInfo.systemUptime
         queue.sync {
             guard let session else { return }
-            _ = pm_key(session, Int32(index), down ? 1 : 0)
+            let result = pm_key(session, Int32(index), down ? 1 : 0)
+            if LanDiagnostics.shared.active {
+                LanDiagnostics.shared.record("key", ["index": index, "down": down, "result": result,
+                    "sim_s": pm_seconds(session), "requested_uptime_s": requested,
+                    "queue_wait_ms": (ProcessInfo.processInfo.systemUptime - requested) * 1000])
+            }
             holdingKeys = down
             if down { armTimer(ms: 1) }
         }
@@ -168,7 +175,10 @@ final class Engine {
 
     func releaseKeys() {
         queue.sync {
-            if let session { pm_release_keys(session) }
+            if let session {
+                pm_release_keys(session)
+                LanDiagnostics.shared.record("release_keys", ["sim_s": pm_seconds(session)])
+            }
             holdingKeys = false
         }
     }
@@ -420,28 +430,66 @@ final class Engine {
 
     /// Feed bytes received from the app-side infrared transport.
     func irWrite(_ bytes: [UInt8]) {
+        let requested = ProcessInfo.processInfo.systemUptime
         queue.sync {
             guard let session, !bytes.isEmpty else { return }
+            let wait = (ProcessInfo.processInfo.systemUptime - requested) * 1000
+            var result: Int32 = -1
             bytes.withUnsafeBufferPointer { raw in
                 if let base = raw.baseAddress {
-                    _ = pm_ir_write(session, base, Int32(bytes.count))
+                    result = pm_ir_write(session, base, Int32(bytes.count))
                 }
             }
+            traceIr("uart_rx", bytes: bytes, session: session, waitMs: wait, result: result)
         }
     }
 
     /// Drain firmware infrared output for the app-side transport.
     func irRead() -> [UInt8] {
-        queue.sync {
+        let requested = ProcessInfo.processInfo.systemUptime
+        return queue.sync {
             guard let session else { return [] }
+            let wait = (ProcessInfo.processInfo.systemUptime - requested) * 1000
             var buffer = [UInt8](repeating: 0, count: 512)
             let n = buffer.withUnsafeMutableBufferPointer { raw -> Int32 in
                 guard let base = raw.baseAddress else { return 0 }
                 return pm_ir_read(session, base, 512)
             }
             if n <= 0 { return [] }
-            return Array(buffer.prefix(Int(n)))
+            let bytes = Array(buffer.prefix(Int(n)))
+            traceIr("uart_tx", bytes: bytes, session: session, waitMs: wait, result: n)
+            return bytes
         }
+    }
+
+    private func traceIr(_ event: String, bytes: [UInt8], session: UnsafeMutablePointer<PmSession>, waitMs: Double, result: Int32) {
+        guard LanDiagnostics.shared.active else { return }
+        // Keep normal UART frames intact; cap malformed/oversized transport frames.
+        LanDiagnostics.shared.record(event, ["sim_s": pm_seconds(session), "count": bytes.count,
+            "hex": bytes.prefix(8192).map { String(format: "%02x", $0) }.joined(),
+            "truncated": bytes.count > 8192, "queue_wait_ms": waitMs, "result": result])
+    }
+
+    func traceLanState(_ event: String) {
+        queue.sync { traceLanStateUnlocked(event) }
+    }
+
+    private func traceLanStateUnlocked(_ event: String, fields: [String: Any] = [:]) {
+        guard LanDiagnostics.shared.active else { return }
+        var fields = fields
+        if let session {
+            let text = CString.take(pm_ir_diagnostics(session))
+            if let data = text.data(using: .utf8),
+               let state = try? JSONSerialization.jsonObject(with: data) {
+                fields["firmware"] = state
+            }
+            fields["screen"] = pullFrame().withUnsafeBufferPointer { pixels in
+                CString.take(pm_menu_text(pixels.baseAddress, pixels.count))
+            }
+        } else {
+            fields["session_missing"] = true
+        }
+        LanDiagnostics.shared.record(event, fields)
     }
 
     func frame() -> [UInt32] {
@@ -544,6 +592,9 @@ final class Engine {
         let now = CFAbsoluteTimeGetCurrent()
         let dt = now - lastTick
         lastTick = now
+        let trace = LanDiagnostics.shared.active
+        let simBefore = trace ? pm_seconds(session) : 0
+        let pumpStart = ProcessInfo.processInfo.systemUptime
         let prefs = reloadUnlocked()
         var input = PmPumpIn()
         input.now_unix = Date().timeIntervalSince1970
@@ -563,6 +614,16 @@ final class Engine {
         let cap = Int32(pcmBuffer.count)
         pcmBuffer.withUnsafeMutableBufferPointer { raw in
             pm_pump(session, &input, &output, raw.baseAddress, cap)
+        }
+        if trace && (now - lastLanSample >= 1 || dt > 0.1 || output.step_code != 0 || output.stopped != 0) {
+            lastLanSample = now
+            traceLanStateUnlocked("pump", fields: ["dt_ms": dt * 1000,
+                "pump_ms": (ProcessInfo.processInfo.systemUptime - pumpStart) * 1000,
+                "sim_before_s": simBefore, "sim_after_s": pm_seconds(session),
+                "visible": pump.visible, "interactive": pump.interactive,
+                "step_code": output.step_code, "route": output.route,
+                "backlog_s": output.backlog, "catching_up": output.catching_up != 0,
+                "timer_ms": pump.intervalMs])
         }
         if output.catching_up != 0 {
             let total = output.catchup_total

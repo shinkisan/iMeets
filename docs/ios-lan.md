@@ -64,3 +64,38 @@ xcrun simctl create "iMeets B" com.apple.CoreSimulator.SimDeviceType.iPhone-16 c
 - Simulator 没有相机，二维码扫描不可用；
 - 真机与模拟器之间、两台真机之间使用同一套 TCP + tick barrier；
 - 面对面联机连接成功建立时会自动保存一次进度；
+
+## 实机联机诊断（build 10021 / lan-trace-v1）
+
+点 Host 或 Join 时自动开始本地诊断，不需要 Xcode 附加或额外启动参数。
+每次尝试生成独立 JSONL 文件，存在 App 容器的 `Documents/LanDiagnostics/`。
+日志包含本次角色、安装标识、版本、墙钟/单调时钟、按键、UART 原始字节、
+网络状态、tick 等待和超时，以及每秒一次的固件时间、UART 队列、IR 状态和屏幕文字。
+Sweets v062 以外的固件不会按 Sweets 的内存布局解读 IR 上下文。
+
+文件写入在独立队列运行；单文件最多 4 MiB，最多保留 12 个文件。
+写入积压时会丢弃诊断事件并在下条记录标记 `dropped_events`，不会阻塞网络等待磁盘。
+UART 记录最多保留每次调用的前 8192 字节，超出时标记 `truncated`。
+日志包含游戏协议数据，仅保存在本机，不自动上传；连接串的 token/code 不写入这些文件。
+停止或连接失败会结束当前文件；只要不卸载 App，重启后仍可取回日志。
+系统控制台类别 `app.pocketmeets.ios / LAN` 会输出 `PM_LAN_LOG` 文件路径或写入错误。
+
+注意：当前 iOS 的 20 ms tick 只限制网络循环，**没有暂停独立运行的固件 pump**。
+日志记录这项现状，用于定位真机握手问题；这个诊断版本没有改变联机协议或固件时序。
+
+两台真机安装同一版本后，同 Wi-Fi、前台、解除养育暂停，复现一次“玩耍”。
+一端先按 B，另一端约 0.5 秒后按，记录开始时间，失败后先保持现场。
+通过连接/配对到 Mac 的设备导出两端日志（不必保持调试器附加）：
+
+```sh
+xcrun devicectl list devices
+xcrun devicectl device copy from --device <UDID> \
+  --domain-type appDataContainer --domain-identifier app.pocketmeets.ios \
+  --source Documents/LanDiagnostics --destination /tmp/lan-logs-phone-a
+```
+
+对另一台使用不同的目标目录。Simulator 则通过
+`xcrun simctl get_app_container <UDID> app.pocketmeets.ios data` 找容器，再复制同一路径。
+比对 `uart_tx` 与对端 `uart_rx` 的字节流（分块可以不同），结合 `sim_s`、
+`pump.dt_ms`、`transport_tick.wait_ms`、队列长度和 B 键时间判断首包、重传和超时的位置。
+跨设备的 `uptime_s` 不能直接相减；它只用于本机耗时，跨设备关联使用字节流与墙钟。
