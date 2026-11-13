@@ -15,7 +15,7 @@ iMeets is not affiliated with or endorsed by Bandai. No firmware is provided her
 - **Face-to-face multiplayer.** Connect two devices running iMeets over a local network using a QR code or connection string, then use the firmware’s original multiplayer menus. The Japanese Sweets “みーつ → あそぶ” flow has been verified between two physical iPhones. Simulators can connect using a connection string; see the [connection guide](docs/ios-lan.md).
 - **Picture in Picture.** Keep an eye on your pet while using other apps. The PiP play/pause control also controls care pausing.
 - **Offline catch-up.** Reopening replays the time you were away with a progress card, and the toy's clock ends up matching your phone.
-- **Pause care.** Ordinary paused time is excluded. For verified Japanese Sweets v062 native characters paused while asleep, resuming automatically replays elapsed sleep up to that night’s wake time, then syncs the phone clock.
+- **Pause care.** For verified Japanese Sweets v062 native characters, resuming replays only the overlap between the paused interval and the most recent sleep period. Awake time and earlier nights are skipped before syncing the phone clock.
 - **Care information.** The toolbar info button shows growth time remaining, care mistakes, call deadlines and need timers. Currently limited to the verified Japanese Sweets v062 ROM; incompatible ROMs show a notice.
 - **Toilet reminders.** Verified Sweets urges use an in-app message and short tone in the foreground, and system notifications in the background. Sound respects the app’s sound setting.
 - **Live translation panel.** Text on the toy's screen appears in Chinese right away; the panel stays put and shows `……` when there is nothing to read.

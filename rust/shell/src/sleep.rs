@@ -1,8 +1,9 @@
 //! Read-only sleep bounds for the verified Sweets v062 firmware.
 //!
 //! A dark LCD / halted CPU is not a sleeping pet. The firmware's room state
-//! must already be 3, its clock must agree with the RTC, and the selected
-//! character must have a verified night schedule. Infant naps and alternate
+//! is 3 for confirmed sleep. Ordinary awake home states can plan a latest
+//! night, but entry is tested on a disposable copy. Clock and character
+//! schedule must be verified. Infant naps and alternate
 //! downloaded-resource branches are deliberately unsupported.
 
 use tg18::Machine;
@@ -26,6 +27,12 @@ pub(crate) struct SleepWindow {
     pub remaining_seconds: f64,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct SleepOpportunity {
+    pub wake_hour: u8,
+    pub bed_hour: u8,
+}
+
 impl SleepProfile {
     pub(crate) fn for_image(image: &[u8]) -> Option<Self> {
         (tg18::is_image(image) && tg18::code_hash(image) == SWEETS_CODE_HASH).then_some(Self)
@@ -45,6 +52,21 @@ impl SleepProfile {
         Some(SleepWindow { remaining_seconds })
     }
 
+    /// Schedule used to select the latest night at resume. Being awake here
+    /// is allowed only in the ordinary home state; night entry is verified on
+    /// a disposable copy before any replay is adopted.
+    pub(crate) fn opportunity(self, machine: &Machine) -> Option<SleepOpportunity> {
+        let state = observe(machine)?;
+        let room = *machine.sys.sram.get(ROOM_STATE)?;
+        if !state.sleeping && room != 0 {
+            return None;
+        }
+        Some(SleepOpportunity {
+            wake_hour: state.wake_hour,
+            bed_hour: state.bed_hour,
+        })
+    }
+
     /// None means the SRAM/clock/resource is temporarily unavailable, including
     /// cold-boot rebuilding. A valid awake observation is Some(false), even if
     /// the CPU is powered off: minute-alarm wakes can keep the LCD dark.
@@ -56,6 +78,7 @@ impl SleepProfile {
 struct Observation {
     sleeping: bool,
     wake_hour: u8,
+    bed_hour: u8,
     tod: f64,
 }
 
@@ -93,6 +116,7 @@ fn observe(machine: &Machine) -> Option<Observation> {
     Some(Observation {
         sleeping: room == 3 && (hour < wake_hour || hour >= bed_hour),
         wake_hour,
+        bed_hour,
         tod,
     })
 }

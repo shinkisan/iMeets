@@ -5,11 +5,15 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::Path;
 
-/// A receipt captured only when a verified pet is actually sleeping.
+/// Frozen machine clock and verified schedule for the paused pet.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct SleepPause {
     pub rtc: f64,
     pub remaining_seconds: f64,
+    #[serde(default)]
+    pub wake_hour: Option<u8>,
+    #[serde(default)]
+    pub bed_hour: Option<u8>,
 }
 
 /// The endpoint is immutable. Progress is recovered from the saved machine RTC,
@@ -21,25 +25,57 @@ pub struct SleepReplay {
     pub total_seconds: f64,
     #[serde(default)]
     pub completed: bool,
+    #[serde(default)]
+    pub entering_sleep: bool,
 }
 
 impl SleepPause {
     pub fn replay(&self, elapsed: f64) -> Option<SleepReplay> {
+        self.replay_at(elapsed, self.rtc + elapsed)
+    }
+
+    /// Use the resume phone clock for the latest night and the real elapsed
+    /// pause duration for its interval. Older nights never accumulate.
+    pub fn replay_at(&self, elapsed: f64, wall: f64) -> Option<SleepReplay> {
         if !self.rtc.is_finite()
             || self.rtc < 0.0
-            || !self.remaining_seconds.is_finite()
-            || !(0.0..=86_400.0).contains(&self.remaining_seconds)
             || !elapsed.is_finite()
             || elapsed <= 0.001
+            || !wall.is_finite()
+            || wall < 0.0
         {
             return None;
         }
-        let total = elapsed.min(self.remaining_seconds);
-        (total > 0.001).then_some(SleepReplay {
-            start_rtc: self.rtc,
-            end_rtc: self.rtc + total,
+        let (start, end) = match (self.wake_hour, self.bed_hour) {
+            (Some(wake), Some(bed)) if wake == 7 && (20..=22).contains(&bed) => {
+                let day = (wall / 86_400.0).floor() * 86_400.0;
+                let mut night = day + f64::from(bed) * 3600.0;
+                // At bedtime exactly, the new night has no elapsed overlap.
+                if night >= wall {
+                    night -= 86_400.0;
+                }
+                let morning = night + 86_400.0 - f64::from(bed) * 3600.0 + f64::from(wake) * 3600.0;
+                (night.max(wall - elapsed), morning.min(wall))
+            }
+            (None, None) => {
+                // v1.3 metadata is upgraded from a verified live schedule by
+                // Session. This fallback also reads old standalone receipts.
+                if !self.remaining_seconds.is_finite()
+                    || !(0.0..=86_400.0).contains(&self.remaining_seconds)
+                {
+                    return None;
+                }
+                (self.rtc, self.rtc + elapsed.min(self.remaining_seconds))
+            }
+            _ => return None,
+        };
+        let total = end - start;
+        (start >= 0.0 && total > 0.001 && total <= 11.0 * 3600.0).then_some(SleepReplay {
+            start_rtc: start,
+            end_rtc: end,
             total_seconds: total,
             completed: false,
+            entering_sleep: true,
         })
     }
 }
@@ -197,6 +233,8 @@ mod sleep_receipt_tests {
         let anchor = SleepPause {
             rtc: 100_000.0,
             remaining_seconds: 8.0 * 3600.0,
+            wake_hour: None,
+            bed_hour: None,
         };
         assert_eq!(anchor.replay(600.0).unwrap().total_seconds, 600.0);
         assert_eq!(
@@ -212,5 +250,44 @@ mod sleep_receipt_tests {
         let old: CareTimeline = serde_json::from_str(r#"{"care_at":10,"paused":true}"#).unwrap();
         assert!(old.sleep_pause.is_none());
         assert!(old.sleep_replay.is_none());
+    }
+}
+
+#[cfg(test)]
+mod latest_night_tests {
+    use super::*;
+
+    #[test]
+    fn latest_sleep_intersection_does_not_sum_previous_nights() {
+        let day = 100.0 * 86400.0;
+        let make = |pause: f64, resume: f64| {
+            SleepPause {
+                rtc: pause,
+                remaining_seconds: 0.0,
+                wake_hour: Some(7),
+                bed_hour: Some(20),
+            }
+            .replay_at(resume - pause, resume)
+        };
+        assert!(make(day + 18.0 * 3600.0, day + 19.0 * 3600.0).is_none());
+        let partial = make(day + 18.0 * 3600.0, day + 23.0 * 3600.0).unwrap();
+        assert_eq!(partial.start_rtc, day + 20.0 * 3600.0);
+        assert_eq!(partial.total_seconds, 3.0 * 3600.0);
+        let whole = make(day + 18.0 * 3600.0, day + 86400.0 + 12.0 * 3600.0).unwrap();
+        assert_eq!(whole.total_seconds, 11.0 * 3600.0);
+        let many = make(day + 18.0 * 3600.0, day + 6.0 * 86400.0 + 12.0 * 3600.0).unwrap();
+        assert_eq!(many.start_rtc, day + 5.0 * 86400.0 + 20.0 * 3600.0);
+        assert_eq!(many.total_seconds, 11.0 * 3600.0);
+        let current = make(day + 18.0 * 3600.0, day + 6.0 * 86400.0 + 22.0 * 3600.0).unwrap();
+        assert_eq!(current.start_rtc, day + 6.0 * 86400.0 + 20.0 * 3600.0);
+        assert_eq!(current.total_seconds, 2.0 * 3600.0);
+        assert_eq!(
+            make(day + 23.0 * 3600.0, day + 86400.0 + 2.0 * 3600.0)
+                .unwrap()
+                .total_seconds,
+            3.0 * 3600.0
+        );
+        assert!(make(day + 86400.0 + 8.0 * 3600.0, day + 86400.0 + 19.0 * 3600.0).is_none());
+        assert!(make(day + 23.0 * 3600.0, day + 22.0 * 3600.0).is_none());
     }
 }

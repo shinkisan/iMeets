@@ -29,7 +29,7 @@
 #define PM_BLE_NAME "TMGC_meets"
 #define PM_MIXING_VERSION "1.4.3"
 #define PM_RELEASE "1.3"
-#define PM_BUILD 10027
+#define PM_BUILD 10028
 #define PM_GATT_IDLE_MS 300000
 #define PM_GATT_ACTIVE_MS 120000
 #define PM_GATT_GRACE_MS 2500
