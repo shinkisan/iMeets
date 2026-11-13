@@ -498,6 +498,23 @@ pub extern "C" fn pm_take_call(p: *mut Session) -> i32 {
     session(p).map(|s| i32::from(s.take_call)).unwrap_or(0)
 }
 
+/// Read-only hidden care fields, gated by verified ROM code fingerprint.
+#[no_mangle]
+pub extern "C" fn pm_care_info(p: *mut Session) -> *mut c_char {
+    let info = session(p).map(|s| s.care_info()).unwrap_or_else(|| {
+        crate::care_info::CareInfo::unavailable(crate::care_info::InfoStatus::NoSession, false)
+    });
+    owned(serde_json::to_string(&info).expect("care info contains only finite integer values"))
+}
+
+/// -1: unsupported or unavailable; 0: no urge; 1..20: firmware seconds left.
+#[no_mangle]
+pub extern "C" fn pm_potty_seconds(p: *mut Session) -> i32 {
+    session(p)
+        .and_then(|s| s.potty_state())
+        .map_or(-1, |state| i32::from(state.seconds_left))
+}
+
 #[no_mangle]
 pub extern "C" fn pm_save(p: *mut Session) -> i32 {
     match session(p) {

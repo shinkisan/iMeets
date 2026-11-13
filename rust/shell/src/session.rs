@@ -79,7 +79,7 @@ impl Default for PumpIn {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct PumpOut {
     pub stopped: bool,
     pub error: String,
@@ -117,6 +117,10 @@ pub struct Session {
     pub playable: bool,
     age_profile: Option<crate::age::AgeProfile>,
     age_refresh_ready_at: Option<f64>,
+    potty_profile: Option<crate::potty::PottyProfile>,
+    care_info_profile: Option<crate::care_info::CareInfoProfile>,
+    sleep_profile: Option<crate::sleep::SleepProfile>,
+    sleep_unverified_since: Option<f64>,
     pub link: Link,
     pub care: CareTimeline,
     pub keys: [bool; 3],
@@ -174,6 +178,9 @@ impl Session {
     ) -> Self {
         machine.stop_on_bluetooth = true;
         let age_profile = crate::age::AgeProfile::for_image(&image);
+        let potty_profile = crate::potty::PottyProfile::for_image(&image);
+        let care_info_profile = crate::care_info::CareInfoProfile::for_image(&image);
+        let sleep_profile = crate::sleep::SleepProfile::for_image(&image);
         Self {
             machine,
             image,
@@ -187,6 +194,10 @@ impl Session {
             playable,
             age_profile,
             age_refresh_ready_at: None,
+            potty_profile,
+            care_info_profile,
+            sleep_profile,
+            sleep_unverified_since: None,
             link: Link::default(),
             care: CareTimeline::at(0.0),
             keys: [false; 3],
@@ -277,15 +288,14 @@ impl Session {
         let stored = CareTimeline::load(&session.save_dir);
         let had = session.save_dir.join("care.json").exists();
         session.care = if had { stored } else { CareTimeline::at(now) };
-        let resuming = session.care.paused && !paused;
-        if paused {
-            session.care.set_paused(true, now);
-        } else if session.care.paused {
-            session.care.set_paused(false, now);
-        }
-        if resuming {
-            session.resume_clock_to(tg18::rtc_seconds_now());
+        if paused != session.care.paused {
+            session.care_pause_at(paused, now, tg18::rtc_seconds_now());
+        } else if session.care.sleep_replay.is_some() && session.sleep_profile.is_some() {
+            // A saved partial replay keeps its virtual night clock on reopen.
+            session.catching_up = !paused;
+            session.display_awake(false);
         } else {
+            session.care.sleep_replay = None;
             session.align_clock_for_open(now);
         }
         let _ = session.care.store(&session.save_dir);
@@ -391,6 +401,35 @@ impl Session {
         self.stem == "fw_tg18_jp_v062_2019-09-12_sweets"
     }
 
+    /// Read-only snapshot. Profile is cached from code bytes, never a filename.
+    pub fn care_info(&self) -> crate::care_info::CareInfo {
+        use crate::care_info::{CareInfo, InfoStatus};
+        let paused = self.care.paused;
+        let Some(profile) = self.care_info_profile else {
+            return CareInfo::unavailable(InfoStatus::UnsupportedRom, paused);
+        };
+        let unavailable = if !self.playable || self.stopped {
+            Some(InfoStatus::Stopped)
+        } else if self.catching_up {
+            Some(InfoStatus::CatchingUp)
+        } else if self.machine.sys.powered_off {
+            Some(InfoStatus::Asleep)
+        } else { None };
+        if let Some(status) = unavailable { return CareInfo::unavailable(status, paused); }
+        match profile.read(&self.machine.sys.sram) {
+            Some(data) => CareInfo { status: InfoStatus::Ready, paused, data: Some(data) },
+            None => CareInfo::unavailable(InfoStatus::Initializing, paused),
+        }
+    }
+
+    /// Current firmware care state; never runs or changes the game.
+    pub fn potty_state(&self) -> Option<crate::potty::PottyState> {
+        if !self.playable || self.stopped || self.catching_up {
+            return None;
+        }
+        self.potty_profile?.read(&self.machine)
+    }
+
     pub fn name(&self) -> &str {
         &self.title
     }
@@ -417,18 +456,189 @@ impl Session {
     }
 
     pub fn care_pause(&mut self, paused: bool, now: f64) {
+        self.care_pause_at(paused, now, tg18::rtc_seconds_now());
+    }
+
+    fn rtc_now(&self) -> f64 {
+        self.machine.sys.rtc.ticks(self.machine.sys.game_time) as f64 / 32768.0
+    }
+
+    fn sleep_receipt(&self) -> Option<crate::care::SleepPause> {
+        if self.stopped
+            || self.control_paused
+            || self.switching
+            || link::blocks_edit(self.link.state)
+            || self.save_dir.join("link-pending").exists()
+        {
+            return None;
+        }
+        let window = self.sleep_profile?.window(&self.machine)?;
+        Some(crate::care::SleepPause {
+            rtc: self.rtc_now(),
+            remaining_seconds: window.remaining_seconds,
+        })
+    }
+
+    fn care_pause_at(&mut self, paused: bool, now: f64, wall: f64) {
         let was_paused = self.care.paused;
+        if !was_paused && paused {
+            self.care.sleep_pause = if self.care.sleep_replay.is_none() {
+                self.sleep_receipt()
+            } else {
+                None
+            };
+            self.release_keys();
+        }
+        let planned = if was_paused && !paused && self.care.sleep_replay.is_none() {
+            // Old pause metadata can also qualify, but only with a known pause
+            // timestamp and a still-verifiable frozen sleep snapshot.
+            let anchor = self
+                .care
+                .sleep_pause
+                .clone()
+                .or_else(|| self.sleep_receipt());
+            self.care.pause_started.and_then(|start| {
+                let anchor = anchor?;
+                if self.sleep_profile.is_none() || (anchor.rtc - self.rtc_now()).abs() > 0.01 {
+                    return None;
+                }
+                anchor.replay(now - start)
+            })
+        } else {
+            None
+        };
         self.care.set_paused(paused, now);
         if was_paused && !paused {
-            // Resuming puts the toy back on the phone's clock. The paused gap
-            // itself is still never replayed.
-            self.resume_clock_to(tg18::rtc_seconds_now());
+            self.care.sleep_pause = None;
+            if self.sleep_profile.is_none() {
+                self.care.sleep_replay = None;
+            }
+            if let Some(plan) = planned {
+                self.care.sleep_replay = Some(plan);
+            }
+            if self.care.sleep_replay.is_some() {
+                // Persist the immutable endpoint BEFORE executing any replay.
+                // A failed receipt write falls back to ordinary pause behavior.
+                let durable =
+                    self.save_dir.as_os_str().is_empty() || self.care.store(&self.save_dir).is_ok();
+                if durable {
+                    self.catching_up = true;
+                    self.display_awake(false);
+                    self.pending_pcm.clear();
+                    self.take_call = false;
+                } else {
+                    self.care.sleep_replay = None;
+                    self.resume_clock_to(wall);
+                }
+            } else {
+                self.resume_clock_to(wall);
+            }
         }
         if paused {
             let _ = self.save();
         } else if !self.save_dir.as_os_str().is_empty() {
             let _ = self.care.store(&self.save_dir);
         }
+    }
+
+    /// Replay only the granted part of this one night. Ordinary catch-up must
+    /// not see the skipped daytime or the time spent doing the replay itself.
+    fn pump_sleep_replay(&mut self, inp: &PumpIn, out: &mut PumpOut, wall: f64) {
+        self.catching_up = true;
+        self.display_awake(false);
+        self.pending_pcm.clear();
+        self.take_call = false;
+        let plan = self.care.sleep_replay.as_ref().unwrap().clone();
+        let mut remain = plan.remaining(self.rtc_now());
+        let asleep = self
+            .sleep_profile
+            .and_then(|p| p.still_sleeping(&self.machine));
+        let unverified = if asleep.is_none() {
+            let since = *self
+                .sleep_unverified_since
+                .get_or_insert(self.machine.now());
+            self.machine.now() - since >= 5.0
+        } else {
+            self.sleep_unverified_since = None;
+            false
+        };
+        let finish = plan.completed
+            || unverified
+            || remain.is_none()
+            || remain.unwrap_or(0.0) <= 0.001
+            || asleep == Some(false);
+        if !finish {
+            let budget = if asleep.is_none() {
+                0.25
+            } else {
+                self.catch_up_budget()
+            };
+            let slice = remain.unwrap().min(budget);
+            let code = self.run_seconds(slice);
+            self.pending_pcm.clear();
+            self.take_call = false;
+            if code != 0 {
+                // Never continue unattended into a link or stopped firmware.
+                self.care.sleep_replay.as_mut().unwrap().completed = true;
+                out.step_code = code;
+                out.route = self.link.kind;
+                if code < 0 {
+                    self.stopped = true;
+                    out.stopped = true;
+                    out.error = self.error.clone();
+                    out.tick = false;
+                }
+            }
+            remain = plan.remaining(self.rtc_now());
+        }
+        let left = remain.unwrap_or(0.0);
+        let awake = self
+            .sleep_profile
+            .and_then(|p| p.still_sleeping(&self.machine))
+            == Some(false);
+        let finished = finish
+            || left <= 0.001
+            || awake
+            || self.stopped
+            || self.care.sleep_replay.as_ref().unwrap().completed;
+        if finished {
+            // Checkpoint the finished receipt with the virtual-night snapshot.
+            // On crash/reopen it skips replay even if the final RTC was moved.
+            self.care.sleep_replay.as_mut().unwrap().completed = true;
+            let stored =
+                self.stopped || self.save_dir.as_os_str().is_empty() || self.save().is_ok();
+            if stored {
+                self.care.sleep_replay = None;
+                self.care.sleep_pause = None;
+                self.sleep_unverified_since = None;
+                self.care.care_at = inp.now_unix;
+                self.resume_clock_to(wall);
+                self.catching_up = false;
+                self.catchup_total = 0.0;
+                out.backlog = 0.0;
+                out.catching_up = false;
+                self.hold_display(inp);
+                if !self.save_dir.as_os_str().is_empty() && self.save().is_ok() {
+                    out.did_save = true;
+                    out.last_save_ms = inp.monotonic_ms;
+                }
+                self.draw_if_due(inp, out);
+                return;
+            }
+        }
+        out.catching_up = true;
+        out.catchup_total = plan.total_seconds;
+        out.remain = left;
+        out.next_ms = 1;
+        if inp.monotonic_ms.saturating_sub(inp.last_catchup_save_ms) >= tick::CATCHUP_SAVE_MS
+            && !self.save_dir.as_os_str().is_empty()
+            && self.save().is_ok()
+        {
+            out.did_save = true;
+            out.last_catchup_save_ms = inp.monotonic_ms;
+            out.last_save_ms = inp.monotonic_ms;
+        }
+        self.draw_if_due(inp, out);
     }
 
     pub fn care_sync(&mut self, now: f64, budget: f64) -> f64 {
@@ -887,6 +1097,10 @@ impl Session {
         if self.care.paused || self.stopped || self.control_paused {
             out.tick = !self.care.paused && !self.stopped && !self.control_paused;
             self.draw_if_due(inp, &mut out);
+            return out;
+        }
+        if self.care.sleep_replay.is_some() {
+            self.pump_sleep_replay(inp, &mut out, tg18::rtc_seconds_now());
             return out;
         }
         self.take_call = false;
@@ -2017,6 +2231,236 @@ mod age_resume_tests {
         assert_eq!(&loaded.machine.sys.sram[0xd850..0xd854], &growth);
         assert!(!loaded.care.age_refresh_pending);
         drop(loaded);
+        fs::remove_dir_all(root).unwrap();
+    }
+}
+
+#[cfg(test)]
+mod sleep_resume_tests {
+    use super::*;
+
+    fn fixture() -> Option<(PathBuf, PathBuf)> {
+        Some((
+            std::env::var_os("POCKET_MEETS_ROM")?.into(),
+            std::env::var_os("POCKET_MEETS_SLEEP_SNAPSHOT")?.into(),
+        ))
+    }
+
+    fn load() -> Option<Session> {
+        let (rom, snapshot) = fixture()?;
+        let mut s = Session::bare(fs::read(rom).unwrap());
+        Snapshot::load(snapshot.to_str().unwrap())
+            .unwrap()
+            .restore(&mut s.machine)
+            .unwrap();
+        s.playable = true;
+        s.machine.print_log = false;
+        s.machine.sys.turbo = 1.0;
+        s.display_awake(false);
+        Some(s)
+    }
+
+    fn growth(s: &Session) -> u32 {
+        u32::from_le_bytes(s.machine.sys.sram[0xd850..0xd854].try_into().unwrap())
+    }
+
+    fn drain(s: &mut Session, now: f64, wall: f64) {
+        for i in 0..40_000 {
+            if s.care.sleep_replay.is_none() {
+                return;
+            }
+            let mut out = PumpOut::default();
+            s.pump_sleep_replay(
+                &PumpIn {
+                    now_unix: now,
+                    monotonic_ms: i * 8,
+                    ..PumpIn::default()
+                },
+                &mut out,
+                wall,
+            );
+            assert!(!s.stopped, "{}", s.error);
+            assert!(!out.play_audio && !out.take_call && out.pcm.is_empty());
+        }
+        panic!("sleep replay did not finish");
+    }
+
+    #[test]
+    fn short_sleep_pause_replays_only_elapsed_and_resume_is_idempotent() {
+        let Some(mut s) = load() else { return };
+        let rtc = s.rtc_now();
+        let g = growth(&s);
+        let happy = s.machine.sys.sram[0xd845];
+        s.care_pause_at(true, 1_000.0, rtc);
+        assert!(s.care.sleep_pause.is_some());
+        s.care_pause_at(false, 1_600.0, rtc + 600.0);
+        assert!((s.care.sleep_replay.as_ref().unwrap().total_seconds - 600.0).abs() < 0.01);
+        let endpoint = s.care.sleep_replay.as_ref().unwrap().end_rtc;
+        let first = s.pump(&PumpIn {
+            now_unix: 1_600.0,
+            dt: 0.02,
+            ..PumpIn::default()
+        });
+        assert!(first.catching_up && first.catchup_total == 600.0);
+        assert!(!first.take_call && !first.play_audio);
+        s.care_pause_at(false, 1_601.0, rtc + 601.0);
+        assert_eq!(s.care.sleep_replay.as_ref().unwrap().end_rtc, endpoint);
+        drain(&mut s, 1_600.0, rtc + 600.0);
+        assert_eq!(growth(&s), g + 10);
+        assert_eq!(s.machine.sys.sram[0xd845], happy);
+        assert!((s.rtc_now() - (rtc + 600.0)).abs() < 0.01);
+        assert!(!s.catching_up);
+        assert!(s.care.due(1_600.0) < 0.01);
+        s.care_pause_at(false, 1_601.0, rtc + 601.0);
+        assert!(s.care.sleep_replay.is_none());
+        assert_eq!(growth(&s), g + 10);
+    }
+
+    #[test]
+    fn several_paused_days_credit_one_night_and_skip_the_awake_gap() {
+        let Some(mut s) = load() else { return };
+        let rtc = s.rtc_now();
+        let g = growth(&s);
+        let needs = (s.machine.sys.sram[0xd845], s.machine.sys.sram[0xd848]);
+        let budget = s
+            .sleep_profile
+            .unwrap()
+            .window(&s.machine)
+            .unwrap()
+            .remaining_seconds;
+        let wall = rtc + 3.0 * 86400.0 + 15.0 * 3600.0; // current afternoon
+        s.care_pause_at(true, 1_000.0, rtc);
+        s.care_pause_at(false, 1_000.0 + 3.0 * 86400.0, wall);
+        assert!((s.care.sleep_replay.as_ref().unwrap().total_seconds - budget).abs() < 0.01);
+        drain(&mut s, 1_000.0 + 3.0 * 86400.0, wall);
+        assert!(
+            (growth(&s) as i64 - g as i64 - 600).abs() <= 1,
+            "night G delta {}",
+            growth(&s) - g
+        );
+        assert_eq!(
+            (s.machine.sys.sram[0xd845], s.machine.sys.sram[0xd848]),
+            needs
+        );
+        let end_g = growth(&s);
+        s.display_awake(true);
+        for _ in 0..500 {
+            assert_eq!(s.step(0.02), 0);
+        }
+        assert!(
+            growth(&s) <= end_g + 1,
+            "RTC alignment replayed skipped daytime: {} -> {}",
+            end_g,
+            growth(&s)
+        );
+        assert_eq!(
+            (s.machine.sys.sram[0xd845], s.machine.sys.sram[0xd848]),
+            needs,
+            "skipped daytime caused care penalties"
+        );
+    }
+
+    #[test]
+    fn partial_replay_survives_save_and_reopen_without_duplicate_credit() {
+        let Some((rom, _)) = fixture() else { return };
+        let Some(mut s) = load() else { return };
+        let root = crate::tmpdir("sleep-reopen");
+        let saves = root.join("Saves");
+        s.root = root.clone();
+        s.save_dir = saves.join("fw_tg18_jp_v062_2019-09-12_sweets");
+        let rtc = s.rtc_now();
+        let g = growth(&s);
+        s.care_pause_at(true, 1_000.0, rtc);
+        s.care_pause_at(false, 1_600.0, rtc + 600.0);
+        for i in 0..100 {
+            if s.rtc_now() - rtc >= 120.0 {
+                break;
+            }
+            s.pump_sleep_replay(
+                &PumpIn {
+                    now_unix: 1_600.0,
+                    monotonic_ms: i,
+                    ..PumpIn::default()
+                },
+                &mut PumpOut::default(),
+                rtc + 600.0,
+            );
+        }
+        assert!(s.rtc_now() > rtc);
+        assert!(s.care.sleep_replay.is_some());
+        s.save().unwrap();
+        let partial = s.rtc_now();
+        drop(s);
+        let mut s = Session::open_care(&rom, &saves, false).unwrap();
+        assert!((s.rtc_now() - partial).abs() < 0.01);
+        assert!(s.care.sleep_replay.is_some());
+        // Pause again during replay; this must not extend its immutable endpoint.
+        let end = s.care.sleep_replay.as_ref().unwrap().end_rtc;
+        s.care_pause_at(true, 1_700.0, rtc + 700.0);
+        s.care_pause_at(false, 5_000.0, rtc + 4_000.0);
+        assert_eq!(s.care.sleep_replay.as_ref().unwrap().end_rtc, end);
+        drain(&mut s, 5_000.0, rtc + 600.0);
+        assert_eq!(growth(&s), g + 10);
+        drop(s);
+        let mut s = Session::open_care(&rom, &saves, false).unwrap();
+        assert!(s.care.sleep_replay.is_none());
+        assert_eq!(growth(&s), g + 10);
+        // A completed receipt left over by interruption cannot replay again,
+        // even if RTC has subsequently been moved backwards.
+        s.care.sleep_replay = Some(crate::care::SleepReplay {
+            start_rtc: rtc,
+            end_rtc: rtc + 600.0,
+            total_seconds: 600.0,
+            completed: true,
+        });
+        s.sync_clock_to(rtc - 100.0);
+        drain(&mut s, 5_000.0, rtc + 600.0);
+        assert_eq!(growth(&s), g + 10);
+        drop(s);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn awake_or_unsupported_pause_remains_frozen() {
+        let Some(mut s) = load() else { return };
+        s.machine.sys.sram[0xd7d4] = 0; // controlled awake-state boundary
+        let g = growth(&s);
+        let rtc = s.rtc_now();
+        s.care_pause_at(true, 1_000.0, rtc);
+        assert!(s.care.sleep_pause.is_none());
+        s.care_pause_at(false, 50_000.0, rtc + 49_000.0);
+        assert!(s.care.sleep_replay.is_none());
+        assert_eq!(growth(&s), g);
+        assert!((s.rtc_now() - (rtc + 49_000.0)).abs() < 0.01);
+        let mut unknown = Session::bare(vec![0; tg18::FLASH_SIZE]);
+        unknown.care_pause_at(true, 1_000.0, 1_000.0);
+        unknown.care_pause_at(false, 10_000.0, 10_000.0);
+        assert!(unknown.care.sleep_replay.is_none());
+    }
+    #[test]
+    fn old_paused_save_can_resume_sleep_and_awake_transition_stops_replay() {
+        let Some((rom, _)) = fixture() else { return };
+        let Some(mut s) = load() else { return };
+        let root = crate::tmpdir("old-sleep-pause");
+        let saves = root.join("Saves");
+        s.save_dir = saves.join("fw_tg18_jp_v062_2019-09-12_sweets");
+        let rtc = s.rtc_now();
+        let g = growth(&s);
+        s.care = CareTimeline::at(tg18::unix_now() - 600.0);
+        s.care.set_paused(true, tg18::unix_now() - 600.0);
+        // Simulate the previous build's metadata, without a sleep receipt.
+        assert!(s.care.sleep_pause.is_none());
+        s.save().unwrap();
+        drop(s);
+        let mut s = Session::open_care(&rom, &saves, false).unwrap();
+        let total = s.care.sleep_replay.as_ref().unwrap().total_seconds;
+        assert!((600.0..610.0).contains(&total));
+        assert!((s.rtc_now() - rtc).abs() < 0.01);
+        s.machine.sys.sram[0xd7d4] = 0; // controlled early-wake boundary
+        drain(&mut s, tg18::unix_now(), rtc + 600.0);
+        assert_eq!(growth(&s), g);
+        assert!(s.care.sleep_replay.is_none());
+        drop(s);
         fs::remove_dir_all(root).unwrap();
     }
 }

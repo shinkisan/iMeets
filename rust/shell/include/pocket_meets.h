@@ -28,8 +28,8 @@
 #define PM_TICK_HIDDEN_MS 100u
 #define PM_BLE_NAME "TMGC_meets"
 #define PM_MIXING_VERSION "1.4.3"
-#define PM_RELEASE "1.2"
-#define PM_BUILD 10020
+#define PM_RELEASE "1.3"
+#define PM_BUILD 10027
 #define PM_GATT_IDLE_MS 300000
 #define PM_GATT_ACTIVE_MS 120000
 #define PM_GATT_GRACE_MS 2500
@@ -133,6 +133,10 @@ void pm_set_fast_keys(PmSession *s, int on);
 int pm_display_hint(int visible, int active, int paused, int follow, int interactive, int present);
 void pm_frame(PmSession *s, unsigned int *argb16384);
 int pm_take_call(PmSession *s);
+/* -1 unavailable/unsupported, 0 no urge, 1..20 seconds until poop (normal speed). */
+int pm_potty_seconds(PmSession *s);
+/* Read-only hidden care JSON. Free with pm_string_free. Includes ROM compatibility. */
+char *pm_care_info(PmSession *s);
 int pm_save(PmSession *s);
 int pm_delete_current_save(PmSession *s);
 char *pm_import_save(PmSession *s, const char *path);

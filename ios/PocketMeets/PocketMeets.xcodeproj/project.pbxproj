@@ -36,6 +36,8 @@
 		A1000000000000000000001A /* ToolbarConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000001A /* ToolbarConfig.swift */; };
 		A1000000000000000000001B /* PiPController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000001B /* PiPController.swift */; };
 		A1000000000000000000001C /* LanDiagnostics.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000001C /* LanDiagnostics.swift */; };
+		A1000000000000000000001D /* PottyAlerts.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000001D /* PottyAlerts.swift */; };
+		A1000000000000000000001E /* CareInfoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000001E /* CareInfoView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -71,6 +73,8 @@
 		A2000000000000000000001A /* ToolbarConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToolbarConfig.swift; sourceTree = "<group>"; };
 		A2000000000000000000001B /* PiPController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PiPController.swift; sourceTree = "<group>"; };
 		A2000000000000000000001C /* LanDiagnostics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LanDiagnostics.swift; sourceTree = "<group>"; };
+		A2000000000000000000001D /* PottyAlerts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PottyAlerts.swift; sourceTree = "<group>"; };
+		A2000000000000000000001E /* CareInfoView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CareInfoView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -132,6 +136,8 @@
 				A2000000000000000000000E /* WebMeetsView.swift */,
 				A20000000000000000000018 /* LanLink.swift */,
 				A2000000000000000000001C /* LanDiagnostics.swift */,
+				A2000000000000000000001D /* PottyAlerts.swift */,
+				A2000000000000000000001E /* CareInfoView.swift */,
 				A20000000000000000000019 /* LanView.swift */,
 				A2000000000000000000001A /* ToolbarConfig.swift */,
 				A2000000000000000000001B /* PiPController.swift */,
@@ -241,6 +247,8 @@
 				A1000000000000000000000E /* WebMeetsView.swift in Sources */,
 				A10000000000000000000018 /* LanLink.swift in Sources */,
 				A1000000000000000000001C /* LanDiagnostics.swift in Sources */,
+				A1000000000000000000001D /* PottyAlerts.swift in Sources */,
+				A1000000000000000000001E /* CareInfoView.swift in Sources */,
 				A10000000000000000000019 /* LanView.swift in Sources */,
 				A1000000000000000000001A /* ToolbarConfig.swift in Sources */,
 				A1000000000000000000001B /* PiPController.swift in Sources */,
@@ -291,7 +299,7 @@
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
 				CODE_SIGN_STYLE = Automatic;
 				DEVELOPMENT_TEAM = "";
-				CURRENT_PROJECT_VERSION = 10023;
+				CURRENT_PROJECT_VERSION = 10027;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = NO;
 				HEADER_SEARCH_PATHS = (
@@ -313,7 +321,7 @@
 					"$(inherited)",
 					"$(SRCROOT)/../../target/aarch64-apple-ios-sim/release",
 				);
-				MARKETING_VERSION = 1.2;
+				MARKETING_VERSION = 1.3;
 				OTHER_LDFLAGS = (
 					"$(inherited)",
 					"-lpocket_meets",
@@ -335,7 +343,7 @@
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
 				CODE_SIGN_STYLE = Automatic;
 				DEVELOPMENT_TEAM = "";
-				CURRENT_PROJECT_VERSION = 10023;
+				CURRENT_PROJECT_VERSION = 10027;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = NO;
 				HEADER_SEARCH_PATHS = (
@@ -357,7 +365,7 @@
 					"$(inherited)",
 					"$(SRCROOT)/../../target/aarch64-apple-ios-sim/release",
 				);
-				MARKETING_VERSION = 1.2;
+				MARKETING_VERSION = 1.3;
 				OTHER_LDFLAGS = (
 					"$(inherited)",
 					"-lpocket_meets",

@@ -1,8 +1,65 @@
-//! Care timeline. Paused gaps are excluded. Sibling ROMs are not walked.
+//! Care timeline. Ordinary paused gaps are excluded; Session may grant a
+//! bounded verified sleep replay. Sibling ROMs are not walked.
 
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::Path;
+
+/// A receipt captured only when a verified pet is actually sleeping.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct SleepPause {
+    pub rtc: f64,
+    pub remaining_seconds: f64,
+}
+
+/// The endpoint is immutable. Progress is recovered from the saved machine RTC,
+/// so a snapshot saved before care.json cannot grant the same minutes twice.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct SleepReplay {
+    pub start_rtc: f64,
+    pub end_rtc: f64,
+    pub total_seconds: f64,
+    #[serde(default)]
+    pub completed: bool,
+}
+
+impl SleepPause {
+    pub fn replay(&self, elapsed: f64) -> Option<SleepReplay> {
+        if !self.rtc.is_finite()
+            || self.rtc < 0.0
+            || !self.remaining_seconds.is_finite()
+            || !(0.0..=86_400.0).contains(&self.remaining_seconds)
+            || !elapsed.is_finite()
+            || elapsed <= 0.001
+        {
+            return None;
+        }
+        let total = elapsed.min(self.remaining_seconds);
+        (total > 0.001).then_some(SleepReplay {
+            start_rtc: self.rtc,
+            end_rtc: self.rtc + total,
+            total_seconds: total,
+            completed: false,
+        })
+    }
+}
+
+impl SleepReplay {
+    pub fn remaining(&self, rtc: f64) -> Option<f64> {
+        if !rtc.is_finite()
+            || !self.start_rtc.is_finite()
+            || !self.end_rtc.is_finite()
+            || !self.total_seconds.is_finite()
+            || self.start_rtc < 0.0
+            || !(0.001..=86_400.0).contains(&self.total_seconds)
+            || (self.end_rtc - self.start_rtc - self.total_seconds).abs() > 0.01
+            || rtc < self.start_rtc - 0.01
+        {
+            return None;
+        }
+        Some((self.end_rtc - rtc).max(0.0))
+    }
+}
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct CareTimeline {
@@ -13,6 +70,10 @@ pub struct CareTimeline {
     /// Persist until a resumed Sweets session has live SRAM to repair its age cache.
     #[serde(default)]
     pub age_refresh_pending: bool,
+    #[serde(default)]
+    pub sleep_pause: Option<SleepPause>,
+    #[serde(default)]
+    pub sleep_replay: Option<SleepReplay>,
 }
 
 impl CareTimeline {
@@ -22,6 +83,8 @@ impl CareTimeline {
             paused: false,
             pause_started: None,
             age_refresh_pending: false,
+            sleep_pause: None,
+            sleep_replay: None,
         }
     }
 
@@ -122,5 +185,32 @@ mod tests {
         assert_eq!(loaded.care_at, 10.0);
         assert!(b.join("keep.txt").exists());
         let _ = fs::remove_dir_all(&root);
+    }
+}
+
+#[cfg(test)]
+mod sleep_receipt_tests {
+    use super::*;
+
+    #[test]
+    fn credits_elapsed_time_only_and_caps_one_night() {
+        let anchor = SleepPause {
+            rtc: 100_000.0,
+            remaining_seconds: 8.0 * 3600.0,
+        };
+        assert_eq!(anchor.replay(600.0).unwrap().total_seconds, 600.0);
+        assert_eq!(
+            anchor.replay(4.0 * 86400.0).unwrap().total_seconds,
+            8.0 * 3600.0
+        );
+        assert!(anchor.replay(-10.0).is_none());
+        assert!(anchor.replay(f64::NAN).is_none());
+        let plan = anchor.replay(600.0).unwrap();
+        assert_eq!(plan.remaining(100_300.0), Some(300.0));
+        assert_eq!(plan.remaining(100_700.0), Some(0.0));
+        assert_eq!(plan.remaining(99_999.0), None);
+        let old: CareTimeline = serde_json::from_str(r#"{"care_at":10,"paused":true}"#).unwrap();
+        assert!(old.sleep_pause.is_none());
+        assert!(old.sleep_replay.is_none());
     }
 }

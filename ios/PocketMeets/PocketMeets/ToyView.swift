@@ -9,6 +9,7 @@ struct ToyView: View {
     @State private var confirmLanDisconnect = false
     @State private var confirmResumeForLan = false
     @State private var showToolbarEditor = false
+    @State private var showCareInfo = false
     @State private var downKeys: Set<Int> = []
     @State private var flashActive = false
     @AppStorage("pm.liveTranslation") private var liveTranslation = false
@@ -66,6 +67,13 @@ struct ToyView: View {
         }
         .navigationBarHidden(true)
         .sheet(isPresented: $model.showLan) { LanView() }
+        .sheet(isPresented: $showCareInfo) { CareInfoView(engine: model.engine, english: english) }
+        .onChange(of: showCareInfo) { open in
+            if open {
+                model.engine.releaseKeys()
+                downKeys.removeAll()
+            }
+        }
         .alert("断开连接？", isPresented: $confirmLanDisconnect) {
             Button("断开", role: .destructive) { model.lan.stop() }
             Button("取消", role: .cancel) {}
@@ -87,7 +95,7 @@ struct ToyView: View {
             )
         }
         .background(KeyCatcher { name, down in
-            guard let index = keyIndex(name) else { return }
+            guard !showCareInfo, let index = keyIndex(name) else { return }
             if down {
                 if downKeys.contains(index) { return }
                 downKeys.insert(index)
@@ -410,6 +418,8 @@ struct ToyView: View {
     @ViewBuilder
     private func toolbarAction(_ action: ToyToolbarAction) -> some View {
         switch action {
+        case .info:
+            chromeButton("info.circle", action.title(english)) { showCareInfo = true }
         case .camera:
             chromeButton("camera.fill", model.t("screenshots_label")) {
                 model.captureScreen(bypassGuide: false)
@@ -515,6 +525,8 @@ struct ToyView: View {
 
     private func perform(_ action: ToyToolbarAction) {
         switch action {
+        case .info:
+            showCareInfo = true
         case .camera:
             model.captureScreen(bypassGuide: false)
         case .appearance:

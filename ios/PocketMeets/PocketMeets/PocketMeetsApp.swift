@@ -86,7 +86,7 @@ struct RootView: View {
                     .padding(.horizontal, 24)
                     .padding(.bottom, 20)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
-                    .onTapGesture { model.notice = "" }
+                    .onTapGesture { model.tapNotice() }
             }
         }
         .animation(.spring(response: 0.32, dampingFraction: 0.86), value: model.notice)

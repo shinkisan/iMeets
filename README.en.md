@@ -12,7 +12,9 @@ iMeets is not affiliated with or endorsed by Bandai. No firmware is provided her
 
 - **Runs an 8 MiB Meets / On dump.**
 - **Offline catch-up.** Reopening replays the time you were away with a progress card, and the toy's clock ends up matching your phone.
-- **Pause care.** While paused the pet stops growing and sending reminders; resuming continues from where it left off, and the paused stretch is not counted.
+- **Pause care.** Ordinary paused time is excluded. For verified Japanese Sweets v062 native characters paused while asleep, resuming automatically replays elapsed sleep up to that night’s wake time, then syncs the phone clock.
+- **Care information.** The toolbar info button shows growth time remaining, care mistakes, call deadlines and need timers. Currently limited to the verified Japanese Sweets v062 ROM; incompatible ROMs show a notice.
+- **Toilet reminders.** Verified Sweets urges use an in-app message and short tone in the foreground, and system notifications in the background. Sound respects the app’s sound setting.
 - **Live translation panel.** Text on the toy's screen appears in Chinese right away; the panel stays put and shows `……` when there is nothing to read.
 - **Faster buttons (experimental, off by default).** Button-to-screen response drops from 63 ms to 25 ms, so taps feel immediate.
 - **Looks.** Shell and minimal each have a light and a dark skin, and either can follow the system; there is also a small-screen look.

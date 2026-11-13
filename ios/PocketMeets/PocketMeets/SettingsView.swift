@@ -34,6 +34,9 @@ struct SettingsView: View {
             Section(model.t("settings_sound")) {
                 Toggle(isOn: soundOn) { settingLabel("speaker.wave.2", model.t("sound_label")) }
                 Toggle(isOn: hapticsBinding) { settingLabel("hand.tap", model.t("key_haptics_label")) }
+                navRow("bell", model.t("notifications_title"), model.notificationStatusTitle) {
+                    model.manageNotifications()
+                }
             }
             Section(model.t("settings_system")) {
                 Toggle(isOn: pauseBinding) { settingLabel("pause.circle", model.t("pause_care")) }
@@ -97,6 +100,7 @@ struct SettingsView: View {
             Text(model.t("delete_confirm"))
         }
         .onAppear {
+            model.refreshNotificationPermission()
             if ProcessInfo.processInfo.arguments.contains("-pmToolbar") {
                 sheet = .toolbar
             }

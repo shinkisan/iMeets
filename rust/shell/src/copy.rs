@@ -40,11 +40,11 @@ struct Row {
 
 const ROWS: &[Row] = &[
     Row { key: "app_name", zh: "iMeets", en: "iMeets" },
-    Row { key: "notes_title", zh: "1.0.1", en: "1.0.1" },
+    Row { key: "notes_title", zh: "1.3", en: "1.3" },
     Row {
         key: "notes_body",
-        zh: "第一次使用后，游戏内的相机可以再次打开。拓麻书架会区分“还不是成人”和“已经使用了成长道具、进化还没完成”。覆盖安装会保留 ROM、存档和设置。",
-        en: "The in-game camera can be opened again after the first use. Tama Shelf distinguishes “not yet adult” from “age-up done, evolution not finished”. Installing over a previous build keeps ROMs, saves, and settings.",
+        zh: "新增养育信息面板、睡眠暂停补时和便意提醒优化。养育信息与睡眠补时仅支持已验证的日版 Sweets v062。覆盖安装会保留 ROM、存档和设置。",
+        en: "Care information, bounded sleep replay after pausing, and improved toilet reminders. Care information and sleep replay support the verified Japanese Sweets v062 ROM. Installing over a previous build keeps ROMs, saves, and settings.",
     },
     Row { key: "nothing_imported", zh: "尚未导入", en: "nothing imported yet" },
     Row { key: "no_rom_imported", zh: "还没有导入 ROM", en: "no ROM imported yet" },
@@ -96,6 +96,14 @@ const ROWS: &[Row] = &[
     Row { key: "screenshot_ok", zh: "已保存到 Pictures/iMeets", en: "saved to Pictures/iMeets" },
     Row { key: "call_title", zh: "拓麻歌子在叫你", en: "your Tamagotchi is calling" },
     Row { key: "call_body", zh: "它刚刚醒来并叫了你，点按查看。", en: "it just woke and called; tap to look" },
+    Row { key: "potty_urge", zh: "快要便便了，快带它去厕所", en: "Needs to poop — take your pet to the toilet" },
+    Row { key: "potty_title", zh: "宝宝想上厕所了", en: "Your pet needs the toilet" },
+    Row { key: "notifications_title", zh: "通知", en: "Notifications" },
+    Row { key: "notifications_not_requested", zh: "未申请", en: "Not requested" },
+    Row { key: "notifications_denied", zh: "未允许", en: "Not allowed" },
+    Row { key: "notifications_allowed", zh: "已允许", en: "Allowed" },
+    Row { key: "notifications_quiet", zh: "静默通知", en: "Quiet notifications" },
+    Row { key: "notifications_request_failed", zh: "通知权限申请失败：", en: "Could not request notification permission:" },
     Row { key: "forecast_stopped", zh: "固件预测在下一次呼叫前停止了。", en: "Firmware forecast stopped before its next call." },
     Row { key: "gift_saved", zh: "礼物已收到，进度已保存", en: "gift received, progress saved" },
     Row { key: "conn_interrupted", zh: "连接已中断，进度已恢复到连接前", en: "connection interrupted, progress restored to before the connection" },
@@ -152,7 +160,7 @@ const ROWS: &[Row] = &[
     Row { key: "about_simple_body", zh: "iMeets 与任何 Bandai 官方产品无关，也未获 Bandai 认可。您需要从自己的设备中提取固件。", en: "iMeets is not affiliated with or endorsed by Bandai. You need to extract the firmware from your own device." },
     Row { key: "about_core_line", zh: "内核：nijiiro-egg（MIT）", en: "Core: nijiiro-egg (MIT)" },
     Row { key: "about_sibling_line", zh: "安卓上的姊妹项目：Open Meets", en: "Sister project on Android: Open Meets" },
-    Row { key: "about_body", zh: "iMeets 1.2（构建 10020）。这不是 Open Meets，也没有得到万代的认可或授权。固件需要你自己提供。", en: "iMeets 1.2 (build 10020). This is not Open Meets and is not endorsed by Bandai. Firmware is supplied by you." },
+    Row { key: "about_body", zh: "iMeets 1.3（构建 10027）。这不是 Open Meets，也没有得到万代的认可或授权。固件需要你自己提供。", en: "iMeets 1.3 (build 10027). This is not Open Meets and is not endorsed by Bandai. Firmware is supplied by you." },
     Row { key: "mit_notice", zh: "模拟器核心 tg18-emu（nijiiro-egg）以 MIT 许可证发布。Copyright (c) 2026 oreo-fox。", en: "The emulator core tg18-emu (nijiiro-egg) is MIT licensed. Copyright (c) 2026 oreo-fox." },
     Row { key: "fw_update_log", zh: "虚拟控制器不接受固件更新。", en: "the virtual controller does not accept firmware updates" },
     Row { key: "switch_starting", zh: "正在切换 ROM", en: "a switch is starting" },
@@ -181,11 +189,11 @@ const ROWS: &[Row] = &[
     Row { key: "language_title", zh: "语言 / Language", en: "语言 / Language" },
     Row { key: "language_note", zh: "切换应用界面与通知语言，不改变游戏 ROM 内的文字。", en: "This changes the app and notification language. It does not change the language inside the ROM." },
     Row { key: "help_title", zh: "使用说明", en: "How to use" },
-    Row { key: "notes_heading", zh: "1.0.1 本次更新", en: "1.0.1 this update" },
-    Row { key: "notes_camera_title", zh: "相机可以重复使用", en: "The camera can be used again" },
-    Row { key: "notes_camera_body", zh: "第一次拍照之后可以再次进入、拍摄和保存照片。", en: "After the first photo you can enter, shoot, and save again." },
-    Row { key: "notes_hut_title", zh: "魔法小屋与结婚", en: "Magic Hut and marriage" },
-    Row { key: "notes_hut_body", zh: "书架会区分尚未成年和加龄后进化未完成，并显示对应提示。使用沙漏后，请先回到主画面完成进化，再发送婚姻角色。", en: "The shelf distinguishes not yet adult from age-up done, evolution not finished, and shows the matching message. After the hourglass, return to the home screen, finish evolving, then send the marriage character." },
+    Row { key: "notes_heading", zh: "1.3 本次更新", en: "1.3 this update" },
+    Row { key: "notes_camera_title", zh: "养育信息与便意提醒", en: "Care information and toilet reminders" },
+    Row { key: "notes_camera_body", zh: "顶栏 ⓘ 可查看已验证日版 Sweets v062 的成长余量、失误次数和需求计时。便意在前台使用应用内提示和短提示音，后台继续使用系统通知。", en: "The toolbar info button shows growth time remaining, care mistakes and need timers for the verified Japanese Sweets v062 ROM. Toilet reminders use an in-app message and short tone in the foreground, and system notifications in the background." },
+    Row { key: "notes_hut_title", zh: "睡眠暂停自动补时", en: "Sleep replay after pausing" },
+    Row { key: "notes_hut_body", zh: "已验证的 Sweets 普通角色睡眠中暂停后，恢复时自动补算实际经过的睡眠段，最多到本次自然醒来；醒后的暂停时间跳过，再对齐手机时钟。", en: "When a verified Sweets native character is paused while asleep, resuming replays only elapsed sleep up to that night’s wake time. Paused awake time is skipped before syncing the phone clock." },
     Row { key: "notes_keep_title", zh: "继续陪伴原来的宝宝", en: "Keep the same pet" },
     Row { key: "notes_keep_body", zh: "直接覆盖安装即可保留已有 ROM、存档和设置。", en: "Installing over this build keeps your ROMs, saves, and settings." },
     Row { key: "help_controls_title", zh: "操作", en: "Controls" },
@@ -440,8 +448,8 @@ mod tests {
             text(Lang::En, "ble_waiting"),
             "等待 WebMeets 连接 · TMGC_meets"
         );
-        assert!(text(Lang::En, "notes_body").contains("not yet adult"));
-        assert!(text(Lang::En, "notes_body").contains("age-up done, evolution not finished"));
+        assert!(text(Lang::En, "notes_body").contains("Sweets v062"));
+        assert!(text(Lang::En, "notes_body").contains("sleep replay"));
         assert_eq!(text(Lang::En, "missing"), "");
         assert_eq!(text(Lang::Zh, "version"), "版本");
         assert_eq!(text(Lang::Zh, "ok"), "好");

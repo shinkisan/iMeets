@@ -1,6 +1,7 @@
 import SwiftUI
 
 enum ToyToolbarAction: String, CaseIterable, Identifiable {
+    case info
     case camera
     case appearance
     case pause
@@ -12,6 +13,7 @@ enum ToyToolbarAction: String, CaseIterable, Identifiable {
 
     var symbol: String {
         switch self {
+        case .info: return "info.circle"
         case .camera: return "camera.fill"
         case .appearance: return "sun.max"
         case .pause: return "pause.circle"
@@ -23,6 +25,7 @@ enum ToyToolbarAction: String, CaseIterable, Identifiable {
 
     func title(_ english: Bool) -> String {
         switch self {
+        case .info: return english ? "Care information" : "养育信息"
         case .camera: return english ? "Screenshot" : "截图"
         case .appearance: return english ? "Theme" : "主题切换"
         case .pause: return english ? "Pause care" : "暂停养育"
@@ -34,7 +37,7 @@ enum ToyToolbarAction: String, CaseIterable, Identifiable {
 
     var fixed: Bool { self == .lan }
 
-    static let defaultOrder: [ToyToolbarAction] = [.appearance, .pause, .translate, .lan, .camera, .pip]
+    static let defaultOrder: [ToyToolbarAction] = [.info, .appearance, .pause, .lan, .translate, .camera, .pip]
     static let defaultHidden: Set<ToyToolbarAction> = [.camera, .pip]
     static let maxVisible = 4
 
@@ -46,7 +49,7 @@ enum ToyToolbarAction: String, CaseIterable, Identifiable {
         screenshots: Bool,
         cameraReady: Bool
     ) -> Set<ToyToolbarAction> {
-        var set: Set<ToyToolbarAction> = [.pause, .lan, .pip]
+        var set: Set<ToyToolbarAction> = [.info, .pause, .lan, .pip]
         // The small-screen look has no top bar of its own to switch.
         if look != 2 { set.insert(.appearance) }
         if look == 1 || look == 2, screenshots, cameraReady { set.insert(.camera) }
@@ -88,6 +91,10 @@ final class ToolbarConfig: ObservableObject {
         let savedHidden = (defaults.array(forKey: hiddenKey) as? [String])?
             .compactMap(ToyToolbarAction.init(rawValue:))
         var order = savedOrder ?? ToyToolbarAction.defaultOrder
+        // Ship the new information button on existing toolbars once. Preserve
+        // the relative order of saved actions; overflow stays in More.
+        if !order.contains(.info) { order.insert(.info, at: 0) }
+
         // Unknown or newly shipped actions are appended in their default slot;
         // a stale saved order never drops a button.
         for action in ToyToolbarAction.defaultOrder where !order.contains(action) {

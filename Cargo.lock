@@ -31,7 +31,7 @@ dependencies = [
 
 [[package]]
 name = "pocket-meets-shell"
-version = "1.2.0"
+version = "1.3.0"
 dependencies = [
  "miniz_oxide",
  "serde",

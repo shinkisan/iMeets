@@ -1,5 +1,6 @@
 import Combine
 import SwiftUI
+import UIKit
 import UserNotifications
 
 enum AppPage: Equatable {
@@ -40,6 +41,8 @@ final class AppModel: ObservableObject {
     /// Cached "a ROM is loaded" flag; never call the engine from a view body.
     @Published private(set) var hasSession = false
     @Published var asleep = true
+    @Published private(set) var notificationStatus: UNAuthorizationStatus = .notDetermined
+    private var notificationRequestInFlight = false
     @Published var library: [String] = []
     @Published var shelfOpen = false
     @Published var focused = true
@@ -50,6 +53,7 @@ final class AppModel: ObservableObject {
     @Published var showHelp = false
     @Published var showLanguage = false
     @Published var showLan = false
+    private var pottyNoticeText: String?
     private var noticeTask: Task<Void, Never>?
     private var lanCancel: AnyCancellable?
     private var lanAutoStarted = false
@@ -120,6 +124,20 @@ final class AppModel: ObservableObject {
         engine.onCall = { [weak self] _ in
             self?.notice = self?.t("call_body") ?? ""
         }
+        engine.onPottyNotice = { [weak self] text in
+            guard let self else { return }
+            if let text {
+                self.pottyNoticeText = text
+                self.notice = text
+            } else {
+                if self.notice == self.pottyNoticeText { self.notice = "" }
+                self.pottyNoticeText = nil
+            }
+        }
+        engine.onOpenPotty = { [weak self] in
+            guard let self, self.hasSession else { return }
+            self.page = .toy
+        }
         engine.onRoute = { [weak self] route in
             guard let self else { return }
             // A hosted link is opened only while the toy is in front.
@@ -147,6 +165,11 @@ final class AppModel: ObservableObject {
             page = .library
             engine.setVisible(false, interactive: focused)
         }
+    }
+
+    func tapNotice() {
+        if hasSession, notice == pottyNoticeText { page = .toy }
+        notice = ""
     }
 
     func t(_ key: String) -> String { engine.text(key, lang: prefs.langCode) }
@@ -222,6 +245,7 @@ final class AppModel: ObservableObject {
             let wasPiP = pip.foregrounded()
             engine.setPipFrames(false)
             focused = true
+            refreshNotificationPermission(requestIfNeeded: hasSession)
             let away = backgroundedAt.map { Date().timeIntervalSince($0) } ?? 0
             backgroundedAt = nil
             if wasPiP {
@@ -439,14 +463,60 @@ final class AppModel: ObservableObject {
         }
     }
 
-    private func askNotificationsIfNeeded() {
-        guard !prefs.notifications_requested else { return }
-        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in
-            Task { @MainActor in
-                self.prefs.notifications_requested = true
-                _ = self.engine.write(self.prefs)
-                self.reload()
+    var notificationStatusTitle: String {
+        switch notificationStatus {
+        case .notDetermined: return t("notifications_not_requested")
+        case .denied: return t("notifications_denied")
+        case .authorized, .ephemeral: return t("notifications_allowed")
+        case .provisional: return t("notifications_quiet")
+        @unknown default: return t("notifications_not_requested")
+        }
+    }
+
+    func refreshNotificationPermission(requestIfNeeded: Bool = false) {
+        UNUserNotificationCenter.current().getNotificationSettings { [weak self] settings in
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                self.notificationStatus = settings.authorizationStatus
+                // The system is authoritative. An imported/old preference flag
+                // must never prevent this device's first permission request.
+                if requestIfNeeded, self.focused, settings.authorizationStatus == .notDetermined {
+                    self.requestNotificationPermission()
+                }
             }
         }
+    }
+
+    func manageNotifications() {
+        UNUserNotificationCenter.current().getNotificationSettings { [weak self] settings in
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                self.notificationStatus = settings.authorizationStatus
+                if settings.authorizationStatus == .notDetermined {
+                    self.requestNotificationPermission()
+                } else if let url = URL(string: UIApplication.openNotificationSettingsURLString) {
+                    UIApplication.shared.open(url)
+                }
+            }
+        }
+    }
+
+    private func requestNotificationPermission() {
+        guard !notificationRequestInFlight else { return }
+        notificationRequestInFlight = true
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { [weak self] _, error in
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                self.notificationRequestInFlight = false
+                if let error {
+                    self.notice = self.t("notifications_request_failed") + " " + error.localizedDescription
+                }
+                self.refreshNotificationPermission()
+            }
+        }
+    }
+
+    private func askNotificationsIfNeeded() {
+        refreshNotificationPermission(requestIfNeeded: true)
     }
 }

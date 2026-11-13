@@ -22,6 +22,9 @@ final class Engine {
     /// True while any shell key is held; keeps the tick short for response.
     private var holdingKeys = false
     private var lastLanSample: CFAbsoluteTime = 0
+    private var lastPottySeconds: Int32 = -1
+    private let pottyNotifications = PottyAlerts()
+    private var pottyEpisode: UInt64 = 0
     var onFrame: (([UInt32], Bool) -> Void)?
     var onNotice: ((String) -> Void)?
     var onStopped: ((String) -> Void)?
@@ -30,6 +33,8 @@ final class Engine {
     private var wasCatchingUp = false
     var onRoute: ((Int32) -> Void)?
     var onCall: ((Bool) -> Void)?
+    var onOpenPotty: (() -> Void)?
+    var onPottyNotice: ((String?) -> Void)?
     var onPrefs: ((Prefs) -> Void)?
 
     init() {
@@ -43,6 +48,21 @@ final class Engine {
         queue.sync {
             _ = root.path.withCString { pm_container_ensure($0) }
         }
+        pottyNotifications.isCurrent = { [weak self] episode in
+            guard let self else { return false }
+            return self.queue.sync { self.lastPottySeconds > 0 && self.pottyEpisode == episode }
+        }
+        pottyNotifications.canPlaySound = { [weak self] episode in
+            guard let self else { return false }
+            return self.queue.sync {
+                self.lastPottySeconds > 0 && self.pottyEpisode == episode && !self.reloadUnlocked().muted
+            }
+        }
+        pottyNotifications.onInApp = { [weak self] text in self?.onPottyNotice?(text) }
+        pottyNotifications.onOpen = { [weak self] in
+            DispatchQueue.main.async { self?.onOpenPotty?() }
+        }
+        UNUserNotificationCenter.current().delegate = pottyNotifications
     }
 
     var settingsURL: URL { root.appendingPathComponent("settings") }
@@ -69,7 +89,10 @@ final class Engine {
     }
 
     func write(_ prefs: Prefs) -> String {
-        queue.sync {
+        if prefs.muted {
+            DispatchQueue.main.async { [weak self] in self?.pottyNotifications.mute() }
+        }
+        return queue.sync {
             guard let data = try? JSONEncoder().encode(prefs), let text = String(data: data, encoding: .utf8) else {
                 return "invalid JSON"
             }
@@ -150,6 +173,8 @@ final class Engine {
                 pm_close(session)
             }
             session = nil
+            lastPottySeconds = -1
+            clearPottyNotification()
             audio.stop()
         }
     }
@@ -244,6 +269,8 @@ final class Engine {
                 pm_care_pause(session, paused ? 1 : 0, Date().timeIntervalSince1970)
             }
             if paused {
+                lastPottySeconds = -1
+                clearPottyNotification()
                 UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: ["2"])
                 UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ["2"])
             }
@@ -284,6 +311,11 @@ final class Engine {
             guard let session else { return false }
             return pm_current_is_sweets(session) != 0
         }
+    }
+
+    /// Read on the existing serial queue; never advances or changes firmware.
+    func careInfo() -> CareInfoSnapshot? {
+        queue.sync { CareInfoSnapshot.decode(CString.take(pm_care_info(session))) }
     }
 
     /// Player name stored in the game state.
@@ -646,9 +678,26 @@ final class Engine {
             let count = min(Int(output.pcm_count), pcmBuffer.count)
             audio.write(pcmBuffer, count: count, volume: output.volume)
         }
-        // TODO(call-jingle): SPEC §14.15. Only firmware PCM is played. No 22050 Hz UI jingle is mixed in.
+        // Calls use firmware PCM; the one-shot potty chime is handled separately.
         if output.take_call != 0 {
             handleCall(prefs: prefs, visible: pump.visible)
+        }
+        let pottySeconds: Int32 = output.catching_up == 0 && output.stopped == 0 && !prefs.care_paused
+            ? pm_potty_seconds(session) : -1
+        if pottySeconds != lastPottySeconds {
+            let started = pottySeconds > 0 && lastPottySeconds <= 0
+            lastPottySeconds = pottySeconds
+            if started {
+                pottyEpisode &+= 1
+                let episode = pottyEpisode
+                let title = textUnlocked("potty_title", lang: prefs.langCode)
+                let body = textUnlocked("potty_urge", lang: prefs.langCode)
+                DispatchQueue.main.async { [weak self] in
+                    self?.pottyNotifications.begin(episode: episode, title: title, body: body)
+                }
+            } else if pottySeconds <= 0 {
+                clearPottyNotification()
+            }
         }
         if output.drew_frame != 0 {
             let pixels = pullFrame()
@@ -719,6 +768,11 @@ final class Engine {
         content.sound = channel == "pet_calls_silent" ? nil : .default
         let request = UNNotificationRequest(identifier: "2", content: content, trigger: nil)
         UNUserNotificationCenter.current().add(request)
+    }
+
+    private func clearPottyNotification() {
+        pottyEpisode &+= 1
+        DispatchQueue.main.async { [weak self] in self?.pottyNotifications.clear() }
     }
 
     func scheduleForecastAlarm(eventMs: Int64, missedGap: Bool, visible: Bool, muted: Bool, lang: Int32) {
