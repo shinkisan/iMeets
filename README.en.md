@@ -22,9 +22,6 @@ iMeets is not affiliated with or endorsed by Bandai. No firmware is provided her
 - **Faster buttons (experimental, off by default).** Button-to-screen response drops from 63 ms to 25 ms, so taps feel immediate.
 - **Looks.** Shell and minimal each have a light and a dark skin, and either can follow the system; there is also a small-screen look.
 - **Customizable toolbar.** Choose and reorder frequently used buttons; hidden actions remain accessible from More.
-- **Game screenshots.** Save the game screen to Photos to capture growth and multiplayer moments.
-- **ROM library and save backups.** Keep separate progress when switching firmware, with manual saving and save import/export.
-- **Tama Shelf (optional).** Load a content pack to browse and send wallpapers, food, items and accessories to compatible firmware.
 - **Key haptics.** Every shell key gives a light tap, and it can be turned off in settings.
 
 ## Requirements
