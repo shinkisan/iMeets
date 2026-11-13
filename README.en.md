@@ -2,7 +2,8 @@
 
 English · [简体中文](README.md)
 
-An iOS shell for **Tamagotchi Meets / On** firmware dumps, built on the MIT-licensed
+An iOS shell for **Tamagotchi Meets / On** firmware dumps, currently optimized primarily
+for the Japanese Sweets firmware. Built on the MIT-licensed
 [nijiiro-egg](https://github.com/oreo-fox/nijiiro-egg) core, with its interface modelled on
 [Open Meets](https://github.com/kanatallow/Open-Meets).
 
