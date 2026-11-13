@@ -27,6 +27,8 @@ pub struct SleepReplay {
     pub completed: bool,
     #[serde(default)]
     pub entering_sleep: bool,
+    #[serde(default)]
+    pub source_rtc: Option<f64>,
 }
 
 impl SleepPause {
@@ -76,6 +78,7 @@ impl SleepPause {
             total_seconds: total,
             completed: false,
             entering_sleep: true,
+            source_rtc: Some(self.rtc),
         })
     }
 }

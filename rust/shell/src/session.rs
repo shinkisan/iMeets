@@ -577,9 +577,19 @@ impl Session {
                 return true;
             }
         };
+        // A stale entry flag must never jump an already-advanced snapshot back
+        // to bedtime, even if the pet has since woken or reached the endpoint.
+        let rtc = self.rtc_now();
+        if rtc >= plan.end_rtc - 0.001
+            || plan
+                .source_rtc
+                .is_some_and(|source| (rtc - source).abs() > 0.001 && rtc >= plan.start_rtc)
+        {
+            self.care.sleep_replay.as_mut().unwrap().entering_sleep = false;
+            return true;
+        }
         // Recovery after snapshot was written but before metadata was updated.
-        if self.rtc_now() >= plan.start_rtc - 0.001
-            && self.rtc_now() <= plan.end_rtc + 0.001
+        if (self.rtc_now() - plan.start_rtc).abs() <= 0.001
             && profile.still_sleeping(&self.machine) == Some(true)
         {
             self.care.sleep_replay.as_mut().unwrap().entering_sleep = false;
@@ -2567,6 +2577,7 @@ mod sleep_resume_tests {
             total_seconds: 600.0,
             completed: true,
             entering_sleep: false,
+            source_rtc: None,
         });
         s.sync_clock_to(rtc - 100.0);
         drain(&mut s, 5_000.0, rtc + 600.0);
@@ -2776,14 +2787,15 @@ mod sleep_resume_tests {
     }
     #[test]
     fn importing_another_save_discards_speculative_sleep_state() {
-        let Some(mut s)=load_awake(18) else { return };
-        let Some(trial)=load_awake(18) else { return };
-        let rtc=s.rtc_now();let day=(rtc/86400.0).floor()*86400.0;
-        let wall=day+23.0*3600.0;
-        s.care_pause_at(true,1000.0,rtc);
-        s.care_pause_at(false,1000.0+wall-rtc,wall);
-        s.sleep_entry_trial=Some(Box::new(trial));
-        let path=PathBuf::from(std::env::var("POCKET_MEETS_AWAKE_SNAPSHOT").unwrap());
+        let Some(mut s) = load_awake(18) else { return };
+        let Some(trial) = load_awake(18) else { return };
+        let rtc = s.rtc_now();
+        let day = (rtc / 86400.0).floor() * 86400.0;
+        let wall = day + 23.0 * 3600.0;
+        s.care_pause_at(true, 1000.0, rtc);
+        s.care_pause_at(false, 1000.0 + wall - rtc, wall);
+        s.sleep_entry_trial = Some(Box::new(trial));
+        let path = PathBuf::from(std::env::var("POCKET_MEETS_AWAKE_SNAPSHOT").unwrap());
         s.import_save(&path).unwrap();
         assert!(s.sleep_entry_trial.is_none());
         assert!(s.care.sleep_replay.is_none());
@@ -2791,4 +2803,27 @@ mod sleep_resume_tests {
         assert!(!s.catching_up);
     }
 
+    #[test]
+    fn stale_entry_flag_never_restarts_an_advanced_awake_snapshot() {
+        let Some(mut s) = load_awake(18) else { return };
+        let rtc = s.rtc_now();
+        let day = (rtc / 86400.0).floor() * 86400.0;
+        let wall = day + 23.0 * 3600.0;
+        s.care_pause_at(true, 1000.0, rtc);
+        s.care_pause_at(false, 1000.0 + wall - rtc, wall);
+        for _ in 0..100 {
+            if s.prepare_sleep_entry() {
+                break;
+            }
+        }
+        assert!(!s.care.sleep_replay.as_ref().unwrap().completed);
+        assert_eq!(s.run_seconds(60.0), 0);
+        s.machine.sys.sram[0xd7d4] = 0; // wake before the saved budget endpoint
+        s.care.sleep_replay.as_mut().unwrap().entering_sleep = true;
+        let before = (growth(&s), s.machine.executed, s.rtc_now());
+        assert!(s.prepare_sleep_entry());
+        assert!(!s.care.sleep_replay.as_ref().unwrap().entering_sleep);
+        assert!(s.sleep_entry_trial.is_none());
+        assert_eq!(before, (growth(&s), s.machine.executed, s.rtc_now()));
+    }
 }
