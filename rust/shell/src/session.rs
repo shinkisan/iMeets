@@ -414,7 +414,7 @@ impl Session {
             Some(InfoStatus::Stopped)
         } else if self.catching_up {
             Some(InfoStatus::CatchingUp)
-        } else if self.machine.sys.powered_off {
+        } else if self.asleep() {
             Some(InfoStatus::Asleep)
         } else { None };
         if let Some(status) = unavailable { return CareInfo::unavailable(status, paused); }

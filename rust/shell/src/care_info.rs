@@ -120,9 +120,25 @@ fn growth(stage: u8, minutes: u32, pending: bool) -> Growth {
         1 => (0, 60),
         2 => (60, 1500),
         3 => (1500, 2940),
+        4 => {
+            return Growth {
+                // An alarm cold boot rebuilds SRAM. Do not label a partial or
+                // inconsistent record as an adult, or hide pending evolution.
+                state: if pending {
+                    "pending"
+                } else if minutes >= 2940 {
+                    "mature"
+                } else {
+                    "unavailable"
+                },
+                remaining_minutes: None,
+                elapsed_minutes: None,
+                required_minutes: None,
+            };
+        }
         _ => {
             return Growth {
-                state: "mature",
+                state: "unavailable",
                 remaining_minutes: None,
                 elapsed_minutes: None,
                 required_minutes: None,
@@ -173,6 +189,12 @@ mod tests {
         assert_eq!(growth(2, 1500, false).state, "unavailable");
         assert_eq!(growth(2, 1500, true).state, "pending");
         assert_eq!(growth(4, 4513, false).state, "mature");
+        assert_eq!(growth(4, 2939, false).state, "unavailable");
+        assert_eq!(growth(4, 2940, false).state, "mature");
+        assert_eq!(growth(4, 2940, true).state, "pending");
+        for stage in [0, 5, 255] {
+            assert_eq!(growth(stage, 4513, false).state, "unavailable");
+        }
         assert!(growth(2, 1500, false).remaining_minutes.is_none());
     }
 
@@ -230,6 +252,64 @@ mod tests {
     }
 
     #[test]
+    fn young_sleep_and_minute_alarm_never_report_mature() {
+        use crate::session::Session;
+        let Ok(fixtures) = std::env::var("POCKET_MEETS_POTTY_FIXTURES") else {
+            return;
+        };
+        let image = std::fs::read(std::env::var("POCKET_MEETS_ROM").expect("ROM")).unwrap();
+        for (stage, id, minutes) in [(2u8, 2u16, 100u32), (3, 6, 1600)] {
+            let mut s = Session::bare(image.clone());
+            s.playable = true;
+            tg18::snapshot::Snapshot::load(
+                std::path::Path::new(&fixtures)
+                    .join("room.t18s")
+                    .to_str()
+                    .unwrap(),
+            )
+            .unwrap()
+            .restore(&mut s.machine)
+            .unwrap();
+            // Controlled young-character fixture, not a claim of natural growth.
+            let p = &mut s.machine.sys.sram[PARAM..PARAM + 0x53];
+            p[..2].copy_from_slice(&id.to_le_bytes());
+            p[2..4].copy_from_slice(&id.to_le_bytes());
+            p[0x52] = stage;
+            p[0x1c..0x20].copy_from_slice(&minutes.to_le_bytes());
+            p[5] = 3;
+            p[0x11] = 20;
+            p[0x16] = 0;
+            p[0x0c..0x10].fill(0);
+            let sys = &mut s.machine.sys;
+            let now = sys.rtc.ticks(sys.game_time) as f64 / 32768.;
+            let night = (now / 86400.).floor() * 86400. + 21. * 3600.;
+            sys.rtc.base_ticks = (night * 32768.) as i64;
+            sys.rtc.base_time = sys.game_time;
+            sys.rtc_irq.tod_base = (night as i64) % 86400;
+            sys.rtc_irq.tod_set_at = sys.game_time;
+            s.display_awake(false);
+            let mut saw_alarm = false;
+            for _ in 0..7000 {
+                assert_eq!(s.step(0.01), 0);
+                saw_alarm |= s.machine.alarm_wake;
+                let info = s.care_info();
+                if s.asleep() {
+                    assert!(matches!(info.status, InfoStatus::Asleep));
+                    assert!(info.data.is_none());
+                } else if let Some(data) = info.data {
+                    assert_ne!(data.growth.state, "mature");
+                    assert!(data.growth.remaining_minutes.is_some());
+                }
+            }
+            assert!(
+                saw_alarm,
+                "stage {stage} must cover a minute-alarm cold boot"
+            );
+            assert_eq!(s.machine.sys.sram[PARAM + 0x52], stage);
+        }
+    }
+
+    #[test]
     fn real_rom_snapshot_is_read_only_and_availability_is_explicit() {
         use crate::{ffi, session::Session};
         use std::ffi::CStr;
@@ -276,6 +356,16 @@ mod tests {
         s.catching_up = false;
         s.machine.sys.powered_off = true;
         assert_eq!(read(&mut s)["status"], "asleep");
+        // Minute alarms run a cold boot without a user wake. Never publish
+        // partially restored parameters even when they look like an adult.
+        s.machine.sys.powered_off = false;
+        s.machine.alarm_wake = true;
+        s.machine.sys.sram[PARAM + 0x52] = 4;
+        let v = read(&mut s);
+        assert_eq!(v["status"], "asleep");
+        assert!(v["data"].is_null());
+        s.machine.alarm_wake = false;
+        assert_eq!(read(&mut s)["status"], "ready");
         let mut unknown = Session::bare(vec![0; tg18::FLASH_SIZE]);
         assert_eq!(read(&mut unknown)["status"], "unsupported_rom");
         assert_eq!(read(&mut unknown)["data"], serde_json::Value::Null);

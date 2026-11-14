@@ -2,7 +2,7 @@
 //! sends 1.4.3 because that is the client version the server saw.
 
 pub const RELEASE: &str = "1.3";
-pub const BUILD: i32 = 10028;
+pub const BUILD: i32 = 10029;
 pub const MIXING_VERSION: &str = "1.4.3";
 pub const CORE_VERSION: &str = "1.0.0";
 pub const MIXING_APP_ID: &str = "com.bandai.tamagotchion";
@@ -49,12 +49,12 @@ mod tests {
     #[test]
     fn identity_and_nine_hash_stems() {
         assert_eq!(RELEASE, "1.3");
-        assert_eq!(BUILD, 10028);
+        assert_eq!(BUILD, 10029);
         assert_eq!(MIXING_VERSION, "1.4.3");
         assert_ne!(MIXING_VERSION, RELEASE);
         assert!(should_show_notes(0));
         assert!(should_show_notes(10026));
-        assert!(!should_show_notes(10028));
+        assert!(!should_show_notes(10029));
         assert!(!MIXING_URL.contains("/api_en"));
         assert!(MIXING_URL.contains("com.daiban.tamagotchionapi_en/meets.php"));
         assert_eq!(ALBUM, "Pocket Meets");
