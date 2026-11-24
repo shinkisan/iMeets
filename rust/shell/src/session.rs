@@ -2113,6 +2113,7 @@ mod tests {
         let mut choices = crate::shelf::Choices {
             parts: [0, 0, 0, 0],
             pixels: [None, None, None, None],
+            material: None,
             colors: vec![1],
             sex: 0,
             mode: 1,

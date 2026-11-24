@@ -1,8 +1,6 @@
 //! Spouse builder. Signature addresses come from a scan of the firmware image.
 //!
-//! TODO(tamago-marriage-layout): SPEC §14.13. The 39334-byte message writes
-//! the magic, the declared length, the kind-like byte 22 at offset 76, and
-//! the checksum. Name, color, DNA, and preview offsets are not specified.
+//! Material-backed messages include the packed character and its family portrait.
 //! TODO(stashed-pc): the PC word in the first 64 CPU bytes is set to
 //! `marriageEvent`, which is also stored in r15. The spec says the field is
 //! adjusted and does not name a different address.
@@ -12,6 +10,7 @@
 //! span is copied. No pixel codec is applied.
 
 use crate::copy::{self, Lang};
+use crate::shelf::character::{family_image, Sprite};
 use crate::shelf::slots::MemWrite;
 
 pub const MESSAGE_ADDR: u32 = 545_063_936;
@@ -27,6 +26,8 @@ pub const PARTS: [PartSpan; 4] = [
         key: 'B',
         count: 14,
         header: 16,
+        table: 256,
+        table_len: 228,
         pixel: 1024,
         end: 14416,
     },
@@ -34,6 +35,8 @@ pub const PARTS: [PartSpan; 4] = [
         key: 'M',
         count: 19,
         header: 72,
+        table: 484,
+        table_len: 4,
         pixel: 14416,
         end: 21248,
     },
@@ -41,6 +44,8 @@ pub const PARTS: [PartSpan; 4] = [
         key: 'A',
         count: 11,
         header: 148,
+        table: 488,
+        table_len: 12,
         pixel: 21248,
         end: 29184,
     },
@@ -48,6 +53,8 @@ pub const PARTS: [PartSpan; 4] = [
         key: 'K',
         count: 7,
         header: 192,
+        table: 500,
+        table_len: 8,
         pixel: 29184,
         end: 32768,
     },
@@ -58,8 +65,41 @@ pub struct PartSpan {
     pub key: char,
     pub count: u8,
     pub header: usize,
+    pub table: usize,
+    pub table_len: usize,
     pub pixel: usize,
     pub end: usize,
+}
+
+pub fn write_part(
+    character: &mut [u8],
+    index: usize,
+    offsets: &[u8],
+    table: &[u8],
+    pixels: &[u8],
+) -> Result<(), String> {
+    let span = PARTS[index];
+    let invalid = || copy::text(Lang::En, "shelf_part_invalid").to_string();
+    if offsets.len() != usize::from(span.count) * 4
+        || table.len() != span.table_len
+        || pixels.len() > span.span()
+    {
+        return Err(invalid());
+    }
+    // Offsets in the pack are absolute within the character. Every pose must
+    // resolve within the selected part's own pixel data.
+    for offset in offsets.chunks_exact(4) {
+        let frame = u32::from_le_bytes(offset.try_into().unwrap()) as usize;
+        let relative = frame.checked_sub(span.pixel).ok_or_else(invalid)?;
+        let image = pixels.get(relative..).ok_or_else(invalid)?;
+        Sprite::read(image).ok_or_else(invalid)?;
+    }
+    let pointer = index * 4;
+    character[pointer..pointer + 4].copy_from_slice(&(span.table as u32).to_le_bytes());
+    character[span.header..span.header + offsets.len()].copy_from_slice(offsets);
+    character[span.table..span.table + table.len()].copy_from_slice(table);
+    character[span.pixel..span.pixel + pixels.len()].copy_from_slice(pixels);
+    Ok(())
 }
 
 impl PartSpan {
@@ -432,6 +472,88 @@ pub fn spouse_message() -> Vec<u8> {
     msg
 }
 
+fn material_message(
+    character: &[u8],
+    player: &[u8],
+    sex: u8,
+    dna: [u8; 8],
+    choices: &Choices,
+) -> Result<Vec<u8>, String> {
+    const CHARACTER_START: usize = 268;
+    const FAMILY_TABLE: usize = CHARACTER_START + CHARACTER_LEN;
+    const PORTRAIT_TABLE: usize = 33176;
+    const PORTRAIT_SIZE: usize = 3072;
+    const TAMA: [u8; 8] = [4, 0xf3, 4, 0xe0, 4, 0xec, 4, 0xe0];
+
+    let mut colors = [0; 3];
+    colors[..choices.colors.len()].copy_from_slice(&choices.colors);
+    let portrait = family_image(character, colors)
+        .ok_or_else(|| copy::text(Lang::En, "shelf_part_invalid").to_string())?;
+    let parent = 1 - player[4];
+    let dna_group = if choices.mode == 0 {
+        ((choices.dna_n % 100) / 25) as u8
+    } else {
+        255
+    };
+
+    let mut msg = vec![0; MESSAGE_LEN];
+    msg[..6].copy_from_slice(b"TAMAGO");
+    msg[66..69].copy_from_slice(&colors);
+    msg[72..76].copy_from_slice(&(MESSAGE_LEN as u32).to_le_bytes());
+    msg[76] = 22;
+    msg[82..90].copy_from_slice(&[124, 104, 72, 151, 117, 166, 78, 153]);
+    msg[94] = 56;
+    msg[95] = parent;
+    msg[96..104].copy_from_slice(&TAMA);
+    msg[114..116].copy_from_slice(&player[76..78]);
+    msg[116..118].copy_from_slice(&character[258..260]);
+    msg[122] = 2;
+    msg[124] = 4;
+    msg[138..140].copy_from_slice(&257u16.to_le_bytes());
+    msg[142..144].copy_from_slice(&player[78..80]);
+    msg[152..160].copy_from_slice(&dna_row((choices.dna_n % 100 + 31) % 100));
+    msg[160] = dna_group;
+    msg[161] = sex;
+    msg[162..165].copy_from_slice(&colors);
+    if parent == 1 {
+        msg[165..173].copy_from_slice(&dna);
+    }
+    msg[173] = dna_group;
+
+    // The message points to the character, family metadata, and two portraits.
+    for (at, value) in [
+        (204, 256),
+        (208, FAMILY_TABLE),
+        (236, PORTRAIT_TABLE),
+        (260, 1),
+        (264, CHARACTER_LEN),
+        (FAMILY_TABLE, 1),
+        (FAMILY_TABLE + 4, 1),
+        (FAMILY_TABLE + 8, 128),
+        (PORTRAIT_TABLE, 8),
+        (PORTRAIT_TABLE + 4, 1),
+        (PORTRAIT_TABLE + 8, 2 * PORTRAIT_SIZE),
+    ] {
+        msg[at..at + 4].copy_from_slice(&(value as u32).to_le_bytes());
+    }
+    msg[252] = 16;
+    msg[254] = 1;
+    msg[255] = 4;
+    msg[CHARACTER_START..FAMILY_TABLE].copy_from_slice(character);
+    msg[FAMILY_TABLE + 12] = parent;
+    msg[FAMILY_TABLE + 14] = 3;
+    msg[33116..33118].copy_from_slice(&257u16.to_le_bytes());
+    msg[33118] = 2;
+    msg[33120..33128].copy_from_slice(&TAMA);
+    msg[33140..33148].copy_from_slice(&TAMA);
+    for start in [PORTRAIT_TABLE + 12, PORTRAIT_TABLE + 12 + PORTRAIT_SIZE] {
+        msg[start..start + portrait.len()].copy_from_slice(&portrait);
+    }
+    let sum = super::tamago::checksum(&msg);
+    msg[MESSAGE_LEN - 2..].copy_from_slice(&sum.to_le_bytes());
+    Ok(msg)
+}
+
 pub fn trampoline(previous_mode: u32) -> [u8; 24] {
     let words = [
         previous_mode,
@@ -465,6 +587,7 @@ pub struct MarriagePlan {
 pub struct Choices {
     pub parts: [u8; 4],
     pub pixels: [Option<Vec<u8>>; 4],
+    pub material: Option<Vec<u8>>,
     pub colors: Vec<u8>,
     pub sex: u8,
     pub mode: u8,
@@ -498,17 +621,21 @@ pub fn marriage_plan(
     }
     let sex = resolve_sex(choices.sex, choices.random_sex)?;
     let dna = dna_bytes(choices.mode, choices.dna_n, choices.random_dna)?;
-    let px = [
-        choices.pixels[0].as_deref(),
-        choices.pixels[1].as_deref(),
-        choices.pixels[2].as_deref(),
-        choices.pixels[3].as_deref(),
-    ];
-    let character = build_character(choices.parts, px, sex)?;
-    validate_character(&character)?;
-    let message = spouse_message();
-    // Colors, DNA, the TAMA name, and the preview are not given offsets.
-    let _ = (choices.colors.as_slice(), dna);
+    let (character, message) = if let Some(material) = &choices.material {
+        let mut character = material.clone();
+        if let Some(gender) = character.get_mut(SEX_OFFSET) {
+            *gender = sex;
+        }
+        validate_character(&character)?;
+        let message = material_message(&character, &sram[p..], sex, dna, choices)?;
+        (character, message)
+    } else {
+        let pixels = choices.pixels.each_ref().map(|part| part.as_deref());
+        (
+            build_character(choices.parts, pixels, sex)?,
+            spouse_message(),
+        )
+    };
     let mut cpu64 = cpu[..64].to_vec();
     cpu64[60..64].copy_from_slice(&sigs.marriage_event.to_le_bytes());
     let mode = u32::from_le_bytes(cpu[64..68].try_into().unwrap());
@@ -573,6 +700,7 @@ mod tests {
         Choices {
             parts: [0, 0, 0, 0],
             pixels: [None, None, None, None],
+            material: None,
             colors: vec![1, 2, 12],
             sex: 2,
             mode: 0,

@@ -50,6 +50,15 @@ extension View {
             }
         }
     }
+
+    @ViewBuilder
+    func pmBottomBar<Bar: View>(@ViewBuilder _ bar: () -> Bar) -> some View {
+        if #available(iOS 26.0, *) {
+            safeAreaBar(edge: .bottom, spacing: 0) { bar() }
+        } else {
+            safeAreaInset(edge: .bottom, spacing: 0) { bar() }
+        }
+    }
 }
 
 /// Keeps nearby glass shapes from overlapping. A no-op before iOS 26.

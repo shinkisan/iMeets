@@ -1,6 +1,7 @@
 //! Material packs. `shelf.json` is `tama-shelf` version 1.
 //! Failure deletes the new directory and leaves the previous pack.
 
+use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -10,6 +11,7 @@ static PACK_SEQ: AtomicU64 = AtomicU64::new(1);
 
 use serde_json::Value;
 
+use super::marriage::{self, PARTS};
 use crate::copy::{self, Lang};
 use crate::settings::Settings;
 use crate::zipimp::{self, ZipError};
@@ -35,8 +37,84 @@ pub struct Listed {
     pub kind: String,
     pub language: String,
     pub path: String,
+    pub thumb: Option<String>,
     pub id: u32,
     pub price: u32,
+}
+
+pub struct CharacterPart {
+    pub id: u16,
+    pub thumb: Option<PathBuf>,
+    offset: PathBuf,
+    table: PathBuf,
+    data: PathBuf,
+    english: Option<PathBuf>,
+}
+
+pub fn list_parts(pack_dir: &Path) -> Result<[BTreeMap<u16, CharacterPart>; 4], String> {
+    let text = fs::read_to_string(pack_dir.join("shelf.json"))
+        .map_err(|_| copy::text(Lang::En, "load_pack_first").to_string())?;
+    let manifest: Value = serde_json::from_str(&text).map_err(|e| e.to_string())?;
+    let mut parts = std::array::from_fn(|_| BTreeMap::new());
+    for entry in manifest["parts"].as_array().into_iter().flatten() {
+        let Some(id) = entry["id"].as_u64().and_then(|n| u16::try_from(n).ok()) else {
+            continue;
+        };
+        let Some(kind) = PARTS.iter().position(|part| {
+            entry["part"]
+                .as_str()
+                .is_some_and(|s| s.len() == 1 && s.starts_with(part.key))
+        }) else {
+            continue;
+        };
+        let asset = |key: &str| {
+            let name = entry[key].as_str()?;
+            (!name.is_empty() && !zipimp::escapes(name)).then(|| pack_dir.join(name))
+        };
+        let (Some(offset), Some(table), Some(data)) =
+            (asset("offset"), asset("table"), asset("data"))
+        else {
+            continue;
+        };
+        let part = CharacterPart {
+            id,
+            thumb: asset("thumb"),
+            offset,
+            table,
+            data,
+            english: asset("english"),
+        };
+        parts[kind].entry(id).or_insert(part);
+    }
+    Ok(parts)
+}
+
+pub fn load_character(pack_dir: &Path, ids: [u16; 4], language: &str) -> Result<Vec<u8>, String> {
+    let parts = list_parts(pack_dir)?;
+    let mut character = vec![0; marriage::CHARACTER_LEN];
+    for (index, span) in PARTS.iter().enumerate() {
+        let part = parts[index]
+            .get(&ids[index])
+            .ok_or_else(|| copy::text(Lang::En, "shelf_part_invalid").to_string())?;
+        let table = if language == "en" {
+            part.english.as_deref().unwrap_or(&part.table)
+        } else {
+            &part.table
+        };
+        let read = |path: &Path, max_len: usize| {
+            let invalid = || copy::text(Lang::En, "shelf_part_invalid").to_string();
+            let file = fs::metadata(path).map_err(|_| invalid())?;
+            if !file.is_file() || file.len() == 0 || file.len() > max_len as u64 {
+                return Err(invalid());
+            }
+            fs::read(path).map_err(|_| invalid())
+        };
+        let offsets = read(&part.offset, usize::from(span.count) * 4)?;
+        let metadata = read(table, span.table_len)?;
+        let pixels = read(&part.data, span.span())?;
+        marriage::write_part(&mut character, index, &offsets, &metadata, &pixels)?;
+    }
+    Ok(character)
 }
 
 fn zip_err(e: ZipError) -> String {
@@ -174,13 +252,8 @@ pub fn list_items(pack_dir: &Path, tab: &str, language: &str) -> Result<Vec<List
     let text = fs::read_to_string(pack_dir.join("shelf.json"))
         .map_err(|_| copy::text(Lang::En, "load_pack_first").to_string())?;
     let value: Value = serde_json::from_str(&text).map_err(|e| e.to_string())?;
-    let items = value
-        .get("items")
-        .and_then(|v| v.as_array())
-        .cloned()
-        .unwrap_or_default();
     let mut out = Vec::new();
-    for el in items {
+    for el in value["items"].as_array().into_iter().flatten() {
         let kind = el.get("kind").and_then(|v| v.as_str()).unwrap_or("");
         let lang = el.get("language").and_then(|v| v.as_str()).unwrap_or("");
         if kind != tab {
@@ -198,6 +271,10 @@ pub fn list_items(pack_dir: &Path, tab: &str, language: &str) -> Result<Vec<List
                 .and_then(|v| v.as_str())
                 .unwrap_or("")
                 .to_string(),
+            thumb: el["thumb"]
+                .as_str()
+                .filter(|name| !name.is_empty() && !zipimp::escapes(name))
+                .map(str::to_owned),
             id: el.get("id").and_then(|v| v.as_u64()).unwrap_or(0) as u32,
             price: el.get("price").and_then(|v| v.as_u64()).unwrap_or(0) as u32,
         });
@@ -223,7 +300,7 @@ mod tests {
         fs::write(imports.join("keep.bin"), b"custom").unwrap();
 
         let manifest = br#"{"format":"tama-shelf","version":1,"items":[
-            {"kind":"food","language":"jp","name":"meal","path":"meal.bin"},
+            {"kind":"food","language":"jp","name":"meal","path":"meal.bin","thumb":"thumbs/meal.png"},
             {"kind":"food","language":"en","name":"snack","path":"snack.bin"},
             {"kind":"food","language":"all","name":"both","path":"both.bin"},
             {"kind":"wallpaper","language":"jp","name":"wall","path":"wall.bin"}
@@ -231,6 +308,7 @@ mod tests {
         let zip = zipimp::zip_stored(&[
             ("shelf.json", manifest),
             ("meal.bin", b"m"),
+            ("thumbs/meal.png", b"image"),
             ("snack.bin", b"s"),
             ("both.bin", b"b"),
             ("wall.bin", b"w"),
@@ -242,6 +320,8 @@ mod tests {
         let listed = list_items(&root.join("TamaShelf").join(&name), "food", "jp").unwrap();
         let names: Vec<_> = listed.iter().map(|i| i.name.as_str()).collect();
         assert_eq!(names, vec!["meal", "both"]);
+        assert_eq!(listed[0].thumb.as_deref(), Some("thumbs/meal.png"));
+        assert_eq!(listed[1].thumb, None);
         assert!(imports.join("keep.bin").exists());
 
         let bad = zipimp::zip_stored(&[(
@@ -261,6 +341,7 @@ mod tests {
         let zip2 = zipimp::zip_stored(&[
             ("shelf.json", manifest),
             ("meal.bin", b"m"),
+            ("thumbs/meal.png", b"image"),
             ("snack.bin", b"s"),
             ("both.bin", b"b"),
             ("wall.bin", b"w"),
@@ -313,6 +394,75 @@ mod tests {
             items.len()
         );
         let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn real_character_parts_match_preview_ids_and_packet_if_present() {
+        let Some(path) = std::env::var_os("POCKET_MEETS_SHELF") else {
+            return;
+        };
+        let bytes = fs::read(path).unwrap();
+        let root = crate::tmpdir("shelf-character");
+        let pack = install_pack(&root, &bytes, &mut Settings::new_user()).unwrap();
+        let directory = root.join("TamaShelf").join(pack);
+        let parts = list_parts(&directory).unwrap();
+        assert_eq!(parts.each_ref().map(BTreeMap::len), [118; 4]);
+        assert!(parts
+            .iter()
+            .flat_map(BTreeMap::values)
+            .all(|part| part.thumb.as_deref().is_some_and(Path::is_file)));
+
+        // Different IDs in each category exercise the same lookups the UI uses.
+        let ids = [16, 21, 39, 210];
+        let jp = load_character(&directory, ids, "jp").unwrap();
+        let en = load_character(&directory, ids, "en").unwrap();
+        let actual_ids = PARTS
+            .map(|span| u16::from_le_bytes(en[span.table + 2..span.table + 4].try_into().unwrap()));
+        assert_eq!(actual_ids, ids);
+        assert_ne!(&jp[256..484], &en[256..484]);
+        assert_eq!(&jp[484..], &en[484..]);
+        assert!(load_character(&directory, [0; 4], "jp").is_err());
+
+        let choices = marriage::Choices {
+            parts: [0; 4],
+            pixels: [None, None, None, None],
+            material: Some(en),
+            colors: vec![1, 2, 3],
+            sex: 1,
+            mode: 0,
+            dna_n: 43,
+            random_sex: 0,
+            random_dna: [0; 8],
+        };
+        let mut sram = vec![0; 256];
+        sram[82] = 4;
+        let mut cpu = [0; 180];
+        cpu[60..64].copy_from_slice(&0x2000_0000u32.to_le_bytes());
+        cpu[64] = 19;
+        let sigs = marriage::Sigs {
+            parameter: 0,
+            receive_type: 20,
+            marriage_event: 0x2000_1000,
+        };
+        let plan = marriage::marriage_plan(&sram, &cpu, Some(sigs), &choices).unwrap();
+        let (marriage::Edit::Write(message), marriage::Edit::Write(character)) =
+            (&plan.edits[0], &plan.edits[1])
+        else {
+            panic!("missing character and message");
+        };
+        assert_eq!(&message.bytes[268..33036], &character.bytes);
+        assert_eq!(character.bytes[marriage::SEX_OFFSET], 1);
+        assert_eq!(&message.bytes[33188..33190], &[48, 40]);
+        assert_ne!(
+            message.bytes[33190], 1,
+            "portrait must include visible colors"
+        );
+        assert_eq!(&message.bytes[33188..36260], &message.bytes[36260..39332]);
+        assert_eq!(
+            &message.bytes[39332..],
+            &crate::shelf::tamago::checksum(&message.bytes).to_le_bytes()
+        );
+        let _ = fs::remove_dir_all(root);
     }
     #[test]
     fn legacy_english_names_are_decoded() {

@@ -114,6 +114,15 @@ struct ShelfItem: Identifiable, Equatable, Hashable {
     var name: String
     var kind: String
     var path: String
+    var thumbnailURL: URL?
     var giftId: Int = 0
     var price: Int = 0
+
+    var showsPrice: Bool { kind == "food" || kind == "wallpaper" }
+    var priceLabel: String { "\(price.formatted()) G" }
+}
+
+struct ShelfPart: Identifiable {
+    let id: Int
+    let thumbnailURL: URL?
 }

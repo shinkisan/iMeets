@@ -263,17 +263,44 @@ pub extern "C" fn pm_shelf_list(
     let dir = root_path.join("TamaShelf").join(&settings.shelf_pack);
     match shelf::pack::list_items(&dir, &tab, &language) {
         Ok(items) => {
-            let rows: Vec<Value> = items.into_iter().map(|it| {
-                let abs = if Path::new(&it.path).is_absolute() {
-                    it.path
-                } else {
-                    dir.join(&it.path).to_string_lossy().into_owned()
-                };
-                json!({"name": it.name, "kind": it.kind, "language": it.language, "path": abs, "id": it.id, "price": it.price})
-            }).collect();
+            let rows: Vec<Value> = items
+                .into_iter()
+                .map(|it| {
+                    let path = dir.join(&it.path).to_string_lossy().into_owned();
+                    let thumb = it.thumb.map(|thumb| dir.join(thumb).to_string_lossy().into_owned());
+                    json!({
+                        "name": it.name, "kind": it.kind, "language": it.language,
+                        "path": path, "thumb": thumb, "id": it.id, "price": it.price,
+                    })
+                })
+                .collect();
             owned(json!({"ok": true, "result": rows}).to_string())
         }
         Err(e) => owned(json!({"ok": false, "error": e}).to_string()),
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn pm_shelf_parts(root: *const c_char) -> *mut c_char {
+    let Some(root) = c_str(root) else {
+        return owned(r#"{"ok":false,"error":"null session or request"}"#);
+    };
+    let root = Path::new(&root);
+    let settings = settings::load_settings(&root.join("settings"));
+    if settings.shelf_pack.is_empty() {
+        return owned(json!({"ok": true, "result": [[], [], [], []]}).to_string());
+    }
+    let dir = root.join("TamaShelf").join(&settings.shelf_pack);
+    match shelf::pack::list_parts(&dir) {
+        Ok(parts) => {
+            let rows = parts.map(|group| {
+                group.into_values().map(|part| {
+                    json!({"id": part.id, "thumb": part.thumb})
+                }).collect::<Vec<_>>()
+            });
+            owned(json!({"ok": true, "result": rows}).to_string())
+        }
+        Err(error) => owned(json!({"ok": false, "error": error}).to_string()),
     }
 }
 
@@ -1153,6 +1180,23 @@ pub extern "C" fn pm_shelf_marry(p: *mut Session, spec: *const c_char) -> *mut c
         Ok(v) => v,
         Err(e) => return owned(json!({"ok": false, "error": e.to_string()}).to_string()),
     };
+    let material = if let Some(pick) = value.get("material_parts") {
+        let invalid = || owned(json!({
+            "ok": false, "error": copy::text(Lang::En, "shelf_part_invalid"),
+        }).to_string());
+        let Ok(ids) = serde_json::from_value::<[u16; 4]>(pick.clone()) else { return invalid() };
+        let prefs = settings::load_settings(&s.root.join("settings"));
+        if prefs.shelf_pack.is_empty() || value["material_pack"].as_str() != Some(&prefs.shelf_pack) {
+            return invalid();
+        }
+        let pack = s.root.join("TamaShelf").join(prefs.shelf_pack);
+        match shelf::pack::load_character(&pack, ids, &prefs.shelf_language) {
+            Ok(character) => Some(character),
+            Err(error) => return owned(json!({"ok": false, "error": error}).to_string()),
+        }
+    } else {
+        None
+    };
     let mut parts = [0u8; 4];
     if let Some(arr) = value.get("parts").and_then(|v| v.as_array()) {
         for (i, n) in arr.iter().take(4).enumerate() {
@@ -1171,6 +1215,7 @@ pub extern "C" fn pm_shelf_marry(p: *mut Session, spec: *const c_char) -> *mut c
     let choices = Choices {
         parts,
         pixels: [None, None, None, None],
+        material,
         colors,
         sex: value.get("sex").and_then(|v| v.as_u64()).unwrap_or(0) as u8,
         mode: value.get("mode").and_then(|v| v.as_u64()).unwrap_or(0) as u8,
@@ -1179,7 +1224,7 @@ pub extern "C" fn pm_shelf_marry(p: *mut Session, spec: *const c_char) -> *mut c
             .get("random_sex")
             .and_then(|v| v.as_u64())
             .unwrap_or(0) as u8,
-        random_dna: [0; 8],
+        random_dna: serde_json::from_value(value["random_dna"].clone()).unwrap_or([0; 8]),
     };
     match s.marry(&choices) {
         Ok(plan) => {

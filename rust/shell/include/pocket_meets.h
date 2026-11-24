@@ -213,6 +213,7 @@ char *pm_call_decision(int take_call, int visible, int muted, long long now_ms, 
 int pm_alarm_post(long long event_ms, long long now_ms, int visible, int missed_gap);
 /* Items in the installed pack for one tab. Paths are absolute. */
 char *pm_shelf_list(const char *root, const char *tab, const char *language);
+char *pm_shelf_parts(const char *root);
 /* Unified pause. Invalidates the forecast plan. The UI also calls pm_care_pause. */
 int pm_set_care_paused(const char *root, int paused);
 

@@ -38,21 +38,28 @@ struct RootView: View {
 
     var body: some View {
         NavigationStack {
-            ZStack {
-                switch model.page {
-                case .setup: SetupView().transition(.opacity)
-                case .notes: NotesView().transition(.opacity)
-                case .toy: ToyView().transition(.opacity)
-                case .settings: SettingsView().transition(.opacity)
-                case .library: LibraryView().transition(.opacity)
-                case .help: HelpView().transition(.opacity)
-                case .about: AboutView().transition(.opacity)
-                case .web: WebMeetsView().transition(.opacity)
-                case .mixing: MixingView().transition(.opacity)
-                case .shelf: ShelfView().transition(.opacity)
+            GeometryReader { geometry in
+                let capacity = ToyToolbarMetrics.capacity(
+                    width: geometry.size.width,
+                    lanConnected: model.lan.connected,
+                    english: model.prefs.language == "en"
+                )
+                ZStack {
+                    switch model.page {
+                    case .setup: SetupView().transition(.opacity)
+                    case .notes: NotesView().transition(.opacity)
+                    case .toy: ToyView(toolbarCapacity: capacity).transition(.opacity)
+                    case .settings: SettingsView(toolbarCapacity: capacity).transition(.opacity)
+                    case .library: LibraryView().transition(.opacity)
+                    case .help: HelpView().transition(.opacity)
+                    case .about: AboutView().transition(.opacity)
+                    case .web: WebMeetsView().transition(.opacity)
+                    case .mixing: MixingView().transition(.opacity)
+                    case .shelf: ShelfView().transition(.opacity)
+                    }
                 }
+                .animation(.easeInOut(duration: 0.22), value: model.page)
             }
-            .animation(.easeInOut(duration: 0.22), value: model.page)
         }
         .preferredColorScheme(preferredScheme)
         .tint(Color.pmAccent)

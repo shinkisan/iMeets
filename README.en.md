@@ -19,7 +19,7 @@ iMeets is not affiliated with or endorsed by Bandai. No firmware is provided her
 - **Care information.** The toolbar info button shows growth time remaining, care mistakes, call deadlines and need timers. Currently limited to the verified Japanese Sweets v062 ROM; incompatible ROMs show a notice.
 - **Toilet reminders.** Verified Sweets urges use an in-app message and short tone in the foreground, and system notifications in the background. Sound respects the app’s sound setting.
 - **Event notifications.** Add conditions for hunger, affection and toilet timing; when you leave the app, the verified Japanese Sweets schedule estimates the time and schedules a system reminder.
-- **Tama Shelf (optional).** Load a content pack to browse and send wallpapers, food, items and accessories to compatible firmware.
+- **Tama Shelf (optional).** Load a content pack to preview and send wallpapers, food, items and accessories to compatible firmware, or choose marriage parts by image.
 - **Live translation panel.** Text on the toy's screen appears in Chinese right away; the panel stays put and shows `……` when there is nothing to read.
 - **Faster buttons (experimental, off by default).** Button-to-screen response drops from 63 ms to 25 ms, so taps feel immediate.
 - **Looks.** Shell and minimal each have a light and a dark skin, and either can follow the system; there is also a small-screen look.

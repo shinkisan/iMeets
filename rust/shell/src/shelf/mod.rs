@@ -1,6 +1,7 @@
 //! Tama Shelf. Edits go through `control` pause / write / register / cpsr.
 //! Magic Hut is marriage copy, not a tab.
 
+mod character;
 pub mod custom;
 pub mod marriage;
 pub mod pack;

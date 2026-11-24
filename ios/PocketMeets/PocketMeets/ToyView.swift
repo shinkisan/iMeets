@@ -2,6 +2,7 @@ import SwiftUI
 import UIKit
 
 struct ToyView: View {
+    let toolbarCapacity: Int
     @EnvironmentObject private var model: AppModel
     @EnvironmentObject private var toolbarConfig: ToolbarConfig
     @Environment(\.colorScheme) private var colorScheme
@@ -383,19 +384,22 @@ struct ToyView: View {
     }
 
     private func toolbar(_ available: Set<ToyToolbarAction>) -> some View {
-        HStack(spacing: 8) {
-            Spacer(minLength: 0)
-            ForEach(toolbarConfig.visible(available: available)) { action in
+        let shown = toolbarConfig.visible(available: available, capacity: toolbarCapacity)
+        let extra = toolbarConfig.order.filter { available.contains($0) && !shown.contains($0) }
+        return HStack(spacing: ToyToolbarMetrics.spacing) {
+            ForEach(shown) { action in
                 toolbarAction(action)
             }
-            moreButton(available)
+            moreButton(extra)
         }
-        .padding(.horizontal, 20)
+        .frame(maxWidth: .infinity, alignment: .trailing)
+        .padding(.horizontal, ToyToolbarMetrics.horizontalPadding)
         .padding(.top, 4)
         .sheet(isPresented: $showToolbarEditor) {
             ToolbarEditorView(
                 config: toolbarConfig,
                 available: available,
+                capacity: toolbarCapacity,
                 lanConnected: model.lan.connected,
                 english: english
             )
@@ -474,7 +478,7 @@ struct ToyView: View {
                 Image(systemName: liveTranslation ? "character.bubble.fill" : "character.bubble")
                     .font(.system(size: 17, weight: .semibold))
                     .foregroundStyle(liveTranslation ? Color.pmAccent : chromeColor)
-                    .frame(width: 44, height: 44)
+                    .frame(width: ToyToolbarMetrics.buttonSize, height: ToyToolbarMetrics.buttonSize)
                     .pmGlass(Circle(), interactive: true)
                     .contentShape(Circle())
             }
@@ -488,8 +492,7 @@ struct ToyView: View {
     /// The popup is a UIKit menu. SwiftUI's own `Menu` restarts its glass
     /// morph on every LCD frame, so the open popup flashes. The button keeps
     /// the same menu object until an entry actually changes.
-    private func moreButton(_ available: Set<ToyToolbarAction>) -> some View {
-        let extra = toolbarConfig.more(available: available)
+    private func moreButton(_ extra: [ToyToolbarAction]) -> some View {
         let entries = extra.map { action in
             ToyMoreEntry(
                 action: action,
@@ -511,7 +514,7 @@ struct ToyView: View {
             ),
             relay: moreRelay
         )
-        .frame(width: 44, height: 44)
+        .frame(width: ToyToolbarMetrics.buttonSize, height: ToyToolbarMetrics.buttonSize)
     }
 
     private func moreTitle(_ action: ToyToolbarAction) -> String {
@@ -599,20 +602,24 @@ struct ToyView: View {
             }
         } label: {
             if model.lan.connected {
-                HStack(spacing: 6) {
-                    Circle().fill(Color.green).frame(width: 7, height: 7)
-                    Text("面对面").font(.system(size: 13, weight: .semibold))
+                HStack(spacing: ToyToolbarMetrics.lanSpacing) {
+                    Circle()
+                        .fill(Color.green)
+                        .frame(width: ToyToolbarMetrics.lanDotSize, height: ToyToolbarMetrics.lanDotSize)
+                    Text(ToyToolbarAction.lan.title(english))
+                        .font(.system(size: ToyToolbarMetrics.lanFontSize, weight: .semibold))
+                        .fixedSize()
                 }
                 .foregroundStyle(chromeColor)
-                .padding(.horizontal, 12)
-                .frame(height: 44)
+                .frame(width: ToyToolbarMetrics.connectedLANWidth(english: english),
+                       height: ToyToolbarMetrics.buttonSize)
                 .pmGlass(Capsule(), interactive: true)
                 .contentShape(Capsule())
             } else {
                 Image(systemName: "antenna.radiowaves.left.and.right")
                     .font(.system(size: 17, weight: .semibold))
                     .foregroundStyle(chromeColor)
-                    .frame(width: 44, height: 44)
+                    .frame(width: ToyToolbarMetrics.buttonSize, height: ToyToolbarMetrics.buttonSize)
                     .pmGlass(Circle(), interactive: true)
                     .contentShape(Circle())
             }
@@ -647,7 +654,7 @@ struct ToyView: View {
                         ? chromeColor.opacity(0.35)
                         : (active ? Color.pmAccent : chromeColor)
                 )
-                .frame(width: 44, height: 44)
+                .frame(width: ToyToolbarMetrics.buttonSize, height: ToyToolbarMetrics.buttonSize)
                 .pmGlass(Circle(), interactive: !disabled)
                 .contentShape(Circle())
         }
@@ -1013,7 +1020,7 @@ private struct ToyMenuButton: UIViewRepresentable {
     }
 
     func sizeThatFits(_ proposal: ProposedViewSize, uiView: ToyMenuHost, context: Context) -> CGSize? {
-        CGSize(width: 44, height: 44)
+        CGSize(width: ToyToolbarMetrics.buttonSize, height: ToyToolbarMetrics.buttonSize)
     }
 }
 
@@ -1037,7 +1044,9 @@ private final class ToyMenuHost: UIView {
 
     required init?(coder: NSCoder) { nil }
 
-    override var intrinsicContentSize: CGSize { CGSize(width: 44, height: 44) }
+    override var intrinsicContentSize: CGSize {
+        CGSize(width: ToyToolbarMetrics.buttonSize, height: ToyToolbarMetrics.buttonSize)
+    }
 
     func render(_ model: ToyMenuModel, relay: ToyMoreRelay) {
         let previous = rendered

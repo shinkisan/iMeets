@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 enum ToyToolbarAction: String, CaseIterable, Identifiable {
     case info
@@ -42,7 +43,6 @@ enum ToyToolbarAction: String, CaseIterable, Identifiable {
 
     static let defaultOrder: [ToyToolbarAction] = [.info, .appearance, .pause, .lan, .translate, .camera, .pip, .shelf]
     static let defaultHidden: Set<ToyToolbarAction> = [.camera, .pip]
-    static let maxVisible = 4
 
     /// Actions the current look and settings can actually draw. Everything
     /// else stays listed in the editor but is greyed out instead of vanishing,
@@ -60,6 +60,36 @@ enum ToyToolbarAction: String, CaseIterable, Identifiable {
         if #available(iOS 18.0, *) { set.insert(.translate) }
         if shelf { set.insert(.shelf) }
         return set
+    }
+}
+
+enum ToyToolbarMetrics {
+    static let buttonSize: CGFloat = 44
+    static let spacing: CGFloat = 8
+    static let horizontalPadding: CGFloat = 20
+    static let lanDotSize: CGFloat = 7
+    static let lanSpacing: CGFloat = 6
+    static let lanPadding: CGFloat = 12
+    static let lanFontSize: CGFloat = 13
+    private static let connectedWidths = (zh: measureLANWidth(english: false), en: measureLANWidth(english: true))
+
+    static func connectedLANWidth(english: Bool) -> CGFloat {
+        english ? connectedWidths.en : connectedWidths.zh
+    }
+
+    private static func measureLANWidth(english: Bool) -> CGFloat {
+        let text = ToyToolbarAction.lan.title(english)
+        let font = UIFont.systemFont(ofSize: lanFontSize, weight: .semibold)
+        let textWidth = (text as NSString).size(withAttributes: [.font: font]).width
+        return max(buttonSize, ceil(textWidth) + lanDotSize + lanSpacing + 2 * lanPadding)
+    }
+
+    static func capacity(width: CGFloat, lanConnected: Bool, english: Bool) -> Int {
+        // More always has a button, and every action adds its width and a gap.
+        let lanExtra = lanConnected ? connectedLANWidth(english: english) - buttonSize : 0
+        let remaining = width - 2 * horizontalPadding - buttonSize - lanExtra
+        guard remaining > 0 else { return 0 }
+        return Int(remaining / (buttonSize + spacing))
     }
 }
 
@@ -84,16 +114,20 @@ enum ToyLook {
 
 final class ToolbarConfig: ObservableObject {
     @Published private(set) var order: [ToyToolbarAction]
-    @Published private(set) var hidden: Set<ToyToolbarAction>
+    @Published private var hidden: Set<ToyToolbarAction>
+    @Published private var vacantSlots: Set<ToyToolbarAction>
 
     private let orderKey = "pm.toolbar.order"
     private let hiddenKey = "pm.toolbar.hidden"
+    private let vacantSlotsKey = "pm.toolbar.vacantSlots"
     private let defaults = UserDefaults.standard
 
     init() {
         let savedOrder = (defaults.array(forKey: orderKey) as? [String])?
             .compactMap(ToyToolbarAction.init(rawValue:))
         let savedHidden = (defaults.array(forKey: hiddenKey) as? [String])?
+            .compactMap(ToyToolbarAction.init(rawValue:))
+        let savedVacancies = (defaults.stringArray(forKey: vacantSlotsKey) ?? [])
             .compactMap(ToyToolbarAction.init(rawValue:))
         var order = savedOrder ?? ToyToolbarAction.defaultOrder
         // Ship the new information button on existing toolbars once. Preserve
@@ -112,19 +146,19 @@ final class ToolbarConfig: ObservableObject {
         hidden.remove(.lan)
         self.order = order
         self.hidden = hidden
+        self.vacantSlots = Set(savedVacancies).intersection(hidden)
         persist()
     }
 
-    /// The buttons drawn in the bar, in order, capped at `maxVisible`.
-    /// Face to Face is pinned: if it would fall off the end it takes the last
-    /// slot instead, so a link is never hidden by a layout choice.
-    func visible(available: Set<ToyToolbarAction>) -> [ToyToolbarAction] {
-        var list = order.filter { !hidden.contains($0) && available.contains($0) }
-        if list.count > ToyToolbarAction.maxVisible {
-            list = Array(list.prefix(ToyToolbarAction.maxVisible))
-        }
+    private func candidates(available: Set<ToyToolbarAction>) -> [ToyToolbarAction] {
+        order.filter { available.contains($0) && (!hidden.contains($0) || vacantSlots.contains($0)) }
+    }
+
+    private func slots(available: Set<ToyToolbarAction>, capacity: Int) -> [ToyToolbarAction] {
+        guard capacity > 0 else { return [] }
+        var list = Array(candidates(available: available).prefix(capacity))
         if available.contains(.lan) && !list.contains(.lan) {
-            if list.count >= ToyToolbarAction.maxVisible {
+            if list.count == capacity {
                 list.removeLast()
             }
             list.append(.lan)
@@ -132,46 +166,48 @@ final class ToolbarConfig: ObservableObject {
         return list
     }
 
-    /// Everything reachable from the More menu: available actions that did
-    /// not fit in the bar, in the same order.
-    func more(available: Set<ToyToolbarAction>) -> [ToyToolbarAction] {
-        let shown = Set(visible(available: available))
-        return order.filter { available.contains($0) && !shown.contains($0) }
+    // Keep a slot for a removed action until the user adds a button. A change
+    // in window width only affects how many of the saved slots fit.
+    func visible(available: Set<ToyToolbarAction>, capacity: Int) -> [ToyToolbarAction] {
+        slots(available: available, capacity: capacity).filter { !hidden.contains($0) }
     }
 
-    /// True when the action is on the bar right now. Derived from `visible` so
-    /// the editor and the bar can never disagree.
-    func isVisible(_ action: ToyToolbarAction, available: Set<ToyToolbarAction>) -> Bool {
-        visible(available: available).contains(action)
-    }
+    func show(_ action: ToyToolbarAction, available: Set<ToyToolbarAction>, capacity: Int) {
+        let slots = slots(available: available, capacity: capacity)
+        let shown = slots.filter { !hidden.contains($0) }
+        guard !action.fixed, available.contains(action), !shown.contains(action), shown.count < capacity else { return }
 
-    func isHidden(_ action: ToyToolbarAction) -> Bool {
-        hidden.contains(action)
-    }
-
-    func show(_ action: ToyToolbarAction) {
-        guard !action.fixed else { return }
-        hidden.remove(action)
-        if !order.contains(action) {
-            order.append(action)
+        if let vacancy = slots.first(where: { vacantSlots.contains($0) }), !slots.contains(action),
+           let empty = order.firstIndex(of: vacancy), let occupied = order.firstIndex(of: action) {
+            order.swapAt(empty, occupied)
+            vacantSlots.remove(vacancy)
         }
+        vacantSlots.remove(action)
+        hidden.remove(action)
         persist()
     }
 
     func hide(_ action: ToyToolbarAction) {
-        guard !action.fixed else { return }
+        guard !action.fixed, !hidden.contains(action) else { return }
         hidden.insert(action)
+        vacantSlots.insert(action)
         persist()
     }
 
-    /// Reorder only the buttons on the bar. Hidden actions keep their slots in
-    /// the full order, so re-adding one later does not disturb the bar.
-    func moveBar(from: IndexSet, to: Int, available: Set<ToyToolbarAction>) {
-        var list = visible(available: available)
+    func moveBar(from: IndexSet, to: Int, available: Set<ToyToolbarAction>, capacity: Int) {
+        let slots = slots(available: available, capacity: capacity)
+        var list = slots.filter { !hidden.contains($0) }
         list.move(fromOffsets: from, toOffset: to)
         let moved = Set(list)
         var iterator = list.makeIterator()
         var next = order
+
+        // Give a pinned LAN button its actual slot before rearranging the bar.
+        if slots.last == .lan, let overflow = candidates(available: available).dropFirst(capacity - 1).first,
+           overflow != .lan {
+            next.removeAll { $0 == .lan }
+            if let index = next.firstIndex(of: overflow) { next.insert(.lan, at: index) }
+        }
         for index in next.indices where moved.contains(next[index]) {
             if let action = iterator.next() { next[index] = action }
         }
@@ -182,12 +218,14 @@ final class ToolbarConfig: ObservableObject {
     func reset() {
         order = ToyToolbarAction.defaultOrder
         hidden = ToyToolbarAction.defaultHidden
+        vacantSlots = []
         persist()
     }
 
     private func persist() {
         defaults.set(order.map(\.rawValue), forKey: orderKey)
         defaults.set(hidden.map(\.rawValue), forKey: hiddenKey)
+        defaults.set(vacantSlots.map(\.rawValue), forKey: vacantSlotsKey)
     }
 }
 
@@ -204,6 +242,7 @@ private struct ToolbarRowFramesKey: PreferenceKey {
 struct ToolbarEditorView: View {
     @ObservedObject var config: ToolbarConfig
     let available: Set<ToyToolbarAction>
+    let capacity: Int
     let lanConnected: Bool
     let english: Bool
 
@@ -223,14 +262,14 @@ struct ToolbarEditorView: View {
         colorScheme == .dark ? Color(rgb: 0xD9CDF4) : Color(rgb: 0xA56F83)
     }
 
-    private var bar: [ToyToolbarAction] { config.visible(available: available) }
+    private var bar: [ToyToolbarAction] { config.visible(available: available, capacity: capacity) }
     /// Everything that is not on the bar: hidden actions, overflow and
     /// actions the current look cannot draw.
     private var rest: [ToyToolbarAction] {
         let onBar = Set(bar)
         return config.order.filter { !onBar.contains($0) }
     }
-    private var barIsFull: Bool { bar.count >= ToyToolbarAction.maxVisible && ToyToolbarAction.maxVisible > 0 }
+    private var barIsFull: Bool { bar.count >= capacity }
 
     var body: some View {
         NavigationStack {
@@ -298,31 +337,11 @@ struct ToolbarEditorView: View {
 
     private var preview: some View {
         VStack(spacing: 8) {
-            HStack(spacing: 8) {
-                ForEach(bar) { action in
-                    if action == .lan && lanConnected {
-                        HStack(spacing: 5) {
-                            Circle().fill(Color.green).frame(width: 6, height: 6)
-                            Text(english ? "Face to Face" : "面对面")
-                                .font(.system(size: 12, weight: .semibold))
-                        }
-                        .foregroundStyle(chromeColor)
-                        .padding(.horizontal, 10)
-                        .frame(height: 40)
-                        .pmGlass(Capsule(), interactive: false)
-                    } else {
-                        Image(systemName: action.symbol)
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundStyle(chromeColor)
-                            .frame(width: 40, height: 40)
-                            .pmGlass(Circle(), interactive: false)
-                    }
+            ViewThatFits(in: .horizontal) {
+                previewButtons
+                ScrollView(.horizontal, showsIndicators: false) {
+                    previewButtons
                 }
-                Image(systemName: "ellipsis")
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(chromeColor)
-                    .frame(width: 40, height: 40)
-                    .pmGlass(Circle(), interactive: false)
             }
             .frame(maxWidth: .infinity)
             .animation(.spring(response: 0.3, dampingFraction: 0.9), value: bar)
@@ -336,8 +355,38 @@ struct ToolbarEditorView: View {
         .background(Color(uiColor: .systemGroupedBackground))
     }
 
+    private var previewButtons: some View {
+        HStack(spacing: ToyToolbarMetrics.spacing) {
+            ForEach(bar) { action in
+                if action == .lan && lanConnected {
+                    HStack(spacing: 5) {
+                        Circle().fill(Color.green).frame(width: 6, height: 6)
+                        Text(action.title(english))
+                            .font(.system(size: 12, weight: .semibold))
+                    }
+                    .foregroundStyle(chromeColor)
+                    .padding(.horizontal, 10)
+                    .frame(height: 40)
+                    .pmGlass(Capsule(), interactive: false)
+                } else {
+                    previewIcon(action.symbol)
+                }
+            }
+            previewIcon("ellipsis")
+        }
+        .fixedSize(horizontal: true, vertical: false)
+    }
+
+    private func previewIcon(_ symbol: String) -> some View {
+        Image(systemName: symbol)
+            .font(.system(size: 16, weight: .semibold))
+            .foregroundStyle(chromeColor)
+            .frame(width: 40, height: 40)
+            .pmGlass(Circle(), interactive: false)
+    }
+
     private func row(_ action: ToyToolbarAction) -> some View {
-        let onBar = config.isVisible(action, available: available)
+        let onBar = bar.contains(action)
         let isAvailable = available.contains(action)
         let mustStay = action.fixed && isAvailable
         return HStack(spacing: 12) {
@@ -406,7 +455,8 @@ struct ToolbarEditorView: View {
             config.moveBar(
                 from: IndexSet(integer: from),
                 to: to > from ? to + 1 : to,
-                available: available
+                available: available,
+                capacity: capacity
             )
         }
     }
@@ -419,16 +469,17 @@ struct ToolbarEditorView: View {
             }
             .onEnded { value in
                 let steps = Int((value.translation.height / max(rowPitch, 1)).rounded())
-                let from = bar.firstIndex(of: action) ?? 0
-                let to = min(max(from + steps, 0), bar.count - 1)
                 dragging = nil
                 dragOffset = 0
+                guard let from = bar.firstIndex(of: action) else { return }
+                let to = min(max(from + steps, 0), bar.count - 1)
                 guard to != from else { return }
                 withAnimation(.easeInOut(duration: 0.18)) {
                     config.moveBar(
                         from: IndexSet(integer: from),
                         to: to > from ? to + 1 : to,
-                        available: available
+                        available: available,
+                        capacity: capacity
                     )
                 }
             }
@@ -463,7 +514,7 @@ struct ToolbarEditorView: View {
         } else {
             Button {
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.9)) {
-                    config.show(action)
+                    config.show(action, available: available, capacity: capacity)
                 }
             } label: {
                 Image(systemName: "plus.circle.fill")

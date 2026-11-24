@@ -440,6 +440,7 @@ final class Engine {
                         name: $0["name"] as? String ?? "",
                         kind: $0["kind"] as? String ?? tab,
                         path: $0["path"] as? String ?? "",
+                        thumbnailURL: ($0["thumb"] as? String).map { URL(fileURLWithPath: $0) },
                         giftId: ($0["id"] as? NSNumber)?.intValue ?? 0,
                         price: ($0["price"] as? NSNumber)?.intValue ?? 0
                     )
@@ -460,6 +461,20 @@ final class Engine {
             }
             let parsed = CString.ok(reply)
             return parsed.0 ? "" : localizedUnlocked(parsed.1)
+        }
+    }
+
+    func shelfParts() -> [[ShelfPart]] {
+        queue.sync {
+            let reply = root.path.withCString { CString.take(pm_shelf_parts($0)) }
+            guard let groups = CString.ok(reply).2 as? [[[String: Any]]] else { return [] }
+            return groups.map { group in
+                group.compactMap { row in
+                    guard let id = row["id"] as? Int else { return nil }
+                    let thumbnailURL = (row["thumb"] as? String).map { URL(fileURLWithPath: $0) }
+                    return ShelfPart(id: id, thumbnailURL: thumbnailURL)
+                }
+            }
         }
     }
 

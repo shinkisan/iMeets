@@ -3,6 +3,7 @@ import UIKit
 import UniformTypeIdentifiers
 
 struct SettingsView: View {
+    let toolbarCapacity: Int
     @EnvironmentObject private var model: AppModel
     @EnvironmentObject private var toolbarConfig: ToolbarConfig
     @Environment(\.colorScheme) private var colorScheme
@@ -84,6 +85,7 @@ struct SettingsView: View {
                 ToolbarEditorView(
                     config: toolbarConfig,
                     available: toolbarAvailable,
+                    capacity: toolbarCapacity,
                     lanConnected: model.lan.connected,
                     english: model.prefs.language == "en"
                 )
@@ -184,7 +186,7 @@ struct SettingsView: View {
     }
 
     private var toolbarSummary: String {
-        let count = toolbarConfig.visible(available: toolbarAvailable).count
+        let count = toolbarConfig.visible(available: toolbarAvailable, capacity: toolbarCapacity).count
         return model.prefs.language == "en" ? "\(count) buttons" : "\(count) 个按钮"
     }
 
