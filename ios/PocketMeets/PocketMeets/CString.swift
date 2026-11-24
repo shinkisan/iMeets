@@ -30,6 +30,42 @@ enum CString {
     }
 }
 
+struct EventRule: Codable, Equatable {
+    var metric: String = "hunger"
+    var below: Int = 6
+
+    static let limit = 8
+
+    static func range(for metric: String) -> ClosedRange<Int> {
+        switch metric {
+        case "mood": return 1...100
+        case "potty": return 1...30
+        default: return 1...6
+        }
+    }
+
+    static func fresh(among existing: [EventRule]) -> EventRule {
+        let used = Set(existing.map(\.metric))
+        if !used.contains("hunger") { return EventRule(metric: "hunger", below: 6) }
+        if !used.contains("mood") { return EventRule(metric: "mood", below: 20) }
+        if !used.contains("potty") { return EventRule(metric: "potty", below: 1) }
+        return EventRule(metric: "hunger", below: 6)
+    }
+
+    func clamped() -> EventRule {
+        let allowed = Self.range(for: metric)
+        guard !allowed.contains(below) else { return self }
+        var copy = self
+        switch metric {
+        case "mood": copy.below = 20
+        case "potty": copy.below = 1
+        default: copy.below = 6
+        }
+        if !allowed.contains(copy.below) { copy.below = allowed.lowerBound }
+        return copy
+    }
+}
+
 struct Prefs: Codable, Equatable {
     var language: String = "zh"
     var screenshots: Bool = false
@@ -54,12 +90,19 @@ struct Prefs: Codable, Equatable {
     var shelf_language: String = "jp"
     var shelf_character: String = ""
     var ble_previous_name: String = ""
+    var event_rules: [EventRule] = []
 
     var langCode: Int32 { language == "en" ? 1 : 0 }
 
     static func load(_ json: String) -> Prefs {
         guard let data = json.data(using: .utf8),
-              let prefs = try? JSONDecoder().decode(Prefs.self, from: data) else {
+              var object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return Prefs()
+        }
+        // Older files omit this key. Filling it in keeps the rest of the file.
+        if object["event_rules"] == nil { object["event_rules"] = [] }
+        guard let normalized = try? JSONSerialization.data(withJSONObject: object),
+              let prefs = try? JSONDecoder().decode(Prefs.self, from: normalized) else {
             return Prefs()
         }
         return prefs

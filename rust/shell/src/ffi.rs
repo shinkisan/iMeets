@@ -498,6 +498,26 @@ pub extern "C" fn pm_take_call(p: *mut Session) -> i32 {
     session(p).map(|s| i32::from(s.take_call)).unwrap_or(0)
 }
 
+/// JSON array of seconds until each rule. `null` means that rule will not
+/// occur while the pet is left alone. `0` means it is already due. Free with
+/// `pm_string_free`.
+#[no_mangle]
+pub extern "C" fn pm_event_eta(p: *mut Session, rules_json: *const c_char) -> *mut c_char {
+    let text = c_str(rules_json).unwrap_or_default();
+    let rules: Vec<crate::settings::EventRule> = serde_json::from_str(&text).unwrap_or_default();
+    let eta = session(p)
+        .map(|s| s.event_eta(&rules))
+        .unwrap_or_else(|| vec![None; rules.len()]);
+    let values: Vec<serde_json::Value> = eta
+        .into_iter()
+        .map(|seconds| match seconds {
+            Some(seconds) => serde_json::json!(seconds),
+            None => serde_json::Value::Null,
+        })
+        .collect();
+    owned(serde_json::to_string(&values).unwrap_or_else(|_| "[]".into()))
+}
+
 /// Read-only hidden care fields, gated by verified ROM code fingerprint.
 #[no_mangle]
 pub extern "C" fn pm_care_info(p: *mut Session) -> *mut c_char {

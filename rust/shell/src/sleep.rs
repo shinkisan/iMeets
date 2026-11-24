@@ -121,7 +121,52 @@ fn observe(machine: &Machine) -> Option<Observation> {
     })
 }
 
+struct CharacterRow {
+    wake_hour: u8,
+    bed_hour: u8,
+    /// Character-table reload for the fullness minute timer (`+0x14`).
+    fullness_period: u8,
+    /// Character-table reload for the mood minute timer (`+0x15`).
+    mood_period: u8,
+}
+
+/// Verified native schedule, plus the need periods stored on the same row.
+pub(crate) struct CareRhythm {
+    pub fullness_period: Option<u8>,
+    pub mood_period: Option<u8>,
+    pub wake_hour: u8,
+    pub bed_hour: u8,
+    /// Seconds since midnight when the emulated clock agrees with itself.
+    pub tod_seconds: Option<u32>,
+}
+
+impl SleepProfile {
+    /// Hours and reload periods for event estimates. A missing clock still
+    /// returns the periods; the caller then treats firmware minutes as wall minutes.
+    pub(crate) fn rhythm(self, machine: &Machine) -> Option<CareRhythm> {
+        let p = machine.sys.sram.get(PARAM..PARAM + 0x38f)?;
+        let stage = p[0x52];
+        if !(2..=4).contains(&stage) {
+            return None;
+        }
+        let row = character_row(machine, p, stage)?;
+        let tod = coherent_clock(machine, p).map(|t| t.rem_euclid(DAY) as u32);
+        Some(CareRhythm {
+            fullness_period: (row.fullness_period > 0).then_some(row.fullness_period),
+            mood_period: (row.mood_period > 0).then_some(row.mood_period),
+            wake_hour: row.wake_hour,
+            bed_hour: row.bed_hour,
+            tod_seconds: tod,
+        })
+    }
+}
+
 fn schedule(machine: &Machine, p: &[u8], stage: u8) -> Option<(u8, u8)> {
+    let row = character_row(machine, p, stage)?;
+    Some((row.wake_hour, row.bed_hour))
+}
+
+fn character_row(machine: &Machine, p: &[u8], stage: u8) -> Option<CharacterRow> {
     // Alternate character/DLC records use additional firmware branches in
     // 0x201288F2. Do not guess their pointer layout or sleeping behavior.
     if *machine.sys.sram.get(0xd22f)? != 0 || p[0x241] != 0 || p[0x372] != 0 || p[0x38e] != 0 {
@@ -161,7 +206,15 @@ fn schedule(machine: &Machine, p: &[u8], stage: u8) -> Option<(u8, u8)> {
     let wake = record[0x17];
     let bed = record[0x18];
     // Exhaustive table read of this hash: stages 2..4 wake at 7; bed 20..22.
-    (wake == 7 && (20..=22).contains(&bed)).then_some((wake, bed))
+    if wake != 7 || !(20..=22).contains(&bed) {
+        return None;
+    }
+    Some(CharacterRow {
+        wake_hour: wake,
+        bed_hour: bed,
+        fullness_period: record[0x14],
+        mood_period: record[0x15],
+    })
 }
 
 fn coherent_clock(machine: &Machine, p: &[u8]) -> Option<f64> {

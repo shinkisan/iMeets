@@ -313,6 +313,95 @@ final class Engine {
         }
     }
 
+    static let eventNotificationIds = (0..<EventRule.limit).map { "event-notify-\($0)" }
+    /// Serializes schedule and cancel so a return-to-app removal cannot land
+    /// before the background registration it is meant to undo.
+    private let eventNotifyQueue = DispatchQueue(label: "app.pocketmeets.event-notify")
+
+    /// Replace the away-from-app care reminders. `schedule` false only cancels
+    /// them, which is what returning to the app and pausing care do.
+    /// Registration is waited out under a background task: `add` returns before
+    /// the system has stored the request, and the scene callback may then suspend.
+    func syncEventNotifications(schedule: Bool) {
+        let notices = queue.sync { schedule ? self.makeEventNoticesUnlocked() : [] }
+        let ticket = EventNotifyTicket()
+        ticket.begin()
+        eventNotifyQueue.async {
+            Self.publish(notices)
+            ticket.end()
+        }
+    }
+
+    private static func publish(_ notices: [EventNotice]) {
+        let center = UNUserNotificationCenter.current()
+        center.removePendingNotificationRequests(withIdentifiers: eventNotificationIds)
+        guard !notices.isEmpty else { return }
+        let group = DispatchGroup()
+        for notice in notices {
+            let content = UNMutableNotificationContent()
+            content.title = notice.title
+            content.body = notice.body
+            content.sound = notice.sound ? .default : nil
+            content.threadIdentifier = "pet_events"
+            let trigger = UNTimeIntervalNotificationTrigger(timeInterval: notice.seconds, repeats: false)
+            let request = UNNotificationRequest(identifier: notice.identifier, content: content, trigger: trigger)
+            group.enter()
+            center.add(request) { _ in group.leave() }
+        }
+        _ = group.wait(timeout: .now() + 3)
+    }
+
+    private struct EventNotice {
+        var identifier: String
+        var title: String
+        var body: String
+        var seconds: TimeInterval
+        var sound: Bool
+    }
+
+    /// Caller is already on `queue`.
+    private func makeEventNoticesUnlocked() -> [EventNotice] {
+        guard let session else { return [] }
+        let prefs = reloadUnlocked()
+        if prefs.care_paused || prefs.event_rules.isEmpty { return [] }
+        let rules = Array(prefs.event_rules.prefix(EventRule.limit))
+        guard let data = try? JSONEncoder().encode(rules),
+              let text = String(data: data, encoding: .utf8) else { return [] }
+        let json = text.withCString { CString.take(pm_event_eta(session, $0)) }
+        guard let payload = json.data(using: .utf8),
+              let etas = try? JSONDecoder().decode([Int?].self, from: payload) else { return [] }
+        let english = prefs.language == "en"
+        return rules.enumerated().compactMap { index, rule in
+            guard index < etas.count, let seconds = etas[index], seconds >= 0 else { return nil }
+            return EventNotice(
+                identifier: "event-notify-\(index)",
+                title: english ? "Care reminder" : "照顾提醒",
+                body: Self.eventBody(rule, seconds: seconds, english: english),
+                seconds: TimeInterval(max(seconds, 1)),
+                sound: !prefs.muted
+            )
+        }
+    }
+
+    private static func eventBody(_ rule: EventRule, seconds: Int, english: Bool) -> String {
+        if rule.metric == "potty" {
+            if seconds == 0 {
+                return english ? "Needs the toilet now" : "快要排便了"
+            }
+            return english
+                ? "A poop is about \(rule.below) min away"
+                : "大约 \(rule.below) 分钟后要排便"
+        }
+        if rule.metric == "mood" {
+            return english
+                ? "Affection will fall below \(rule.below)"
+                : "亲密度将低于 \(rule.below)"
+        }
+        return english
+            ? "Hunger will fall below \(rule.below)"
+            : "饥饿度将低于 \(rule.below)"
+    }
+
     /// Read on the existing serial queue; never advances or changes firmware.
     func careInfo() -> CareInfoSnapshot? {
         queue.sync { CareInfoSnapshot.decode(CString.take(pm_care_info(session))) }
@@ -870,6 +959,32 @@ final class Engine {
         }
     }
 
+}
+
+/// Ends the scheduling background task once, from whichever thread finishes first.
+private final class EventNotifyTicket {
+    private let lock = NSLock()
+    private var task: UIBackgroundTaskIdentifier = .invalid
+
+    func begin() {
+        let application = UIApplication.shared
+        let identifier = application.beginBackgroundTask(withName: "event-notify") { [weak self] in
+            self?.end()
+        }
+        lock.lock()
+        task = identifier
+        lock.unlock()
+    }
+
+    func end() {
+        lock.lock()
+        let identifier = task
+        task = .invalid
+        lock.unlock()
+        if identifier != .invalid {
+            UIApplication.shared.endBackgroundTask(identifier)
+        }
+    }
 }
 
 private struct PumpClock {

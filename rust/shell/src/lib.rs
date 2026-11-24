@@ -9,6 +9,7 @@ pub mod care;
 pub mod care_info;
 pub mod control;
 pub mod copy;
+pub mod event_notify;
 pub mod ffi;
 pub mod forecast;
 pub mod gatt;

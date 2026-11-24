@@ -74,6 +74,19 @@ pub struct Settings {
     pub shelf_character: String,
     #[serde(default)]
     pub ble_previous_name: String,
+    /// Care reminders scheduled when the simulator leaves the foreground.
+    #[serde(default)]
+    pub event_rules: Vec<EventRule>,
+}
+
+/// One row in the event-notification list. `below` is a fullness heart, a
+/// mood point, or minutes before the next toilet urge.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct EventRule {
+    #[serde(default)]
+    pub metric: String,
+    #[serde(default)]
+    pub below: i32,
 }
 
 impl Settings {
@@ -102,6 +115,7 @@ impl Settings {
             shelf_language: "jp".into(),
             shelf_character: String::new(),
             ble_previous_name: String::new(),
+            event_rules: Vec::new(),
         }
     }
 
@@ -119,6 +133,22 @@ impl Settings {
         if self.care_intro_version < 0 {
             self.care_intro_version = 0;
         }
+        self.event_rules.truncate(8);
+        self.event_rules.retain_mut(|rule| match rule.metric.as_str() {
+            "hunger" => {
+                rule.below = rule.below.clamp(1, 6);
+                true
+            }
+            "mood" => {
+                rule.below = rule.below.clamp(1, 100);
+                true
+            }
+            "potty" => {
+                rule.below = rule.below.clamp(1, 30);
+                true
+            }
+            _ => false,
+        });
     }
 }
 
@@ -295,6 +325,7 @@ mod tests {
         assert_eq!(s.small_screen_scale, 100);
         assert_eq!(s.care_intro_version, 0);
         assert!(!s.notifications_requested);
+        assert!(s.event_rules.is_empty());
 
         fs::write(&path, r#"{"minimal_ui":true,"background_care":false}"#).unwrap();
         let s = load_settings(&path);
@@ -319,6 +350,14 @@ mod tests {
         assert_eq!(s.language, "zh");
         assert_eq!(s.shelf_language, "en");
         assert!(s.screenshots);
+        let s = store_settings(
+            &path,
+            r#"{"event_rules":[{"metric":"hunger","below":9},{"metric":"nope","below":1},{"metric":"potty","below":1}]}"#,
+        )
+        .unwrap();
+        assert_eq!(s.event_rules.len(), 2);
+        assert_eq!(s.event_rules[0].below, 6);
+        assert_eq!(s.event_rules[1].metric, "potty");
         let text = fs::read_to_string(&path).unwrap();
         assert!(!text.contains("minimal_ui"));
 

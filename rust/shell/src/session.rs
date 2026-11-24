@@ -424,6 +424,34 @@ impl Session {
         }
     }
 
+    /// Seconds until each saved rule, or `None` when leaving will not cross it.
+    /// Does not run the firmware.
+    pub fn event_eta(&self, rules: &[crate::settings::EventRule]) -> Vec<Option<u64>> {
+        let none = vec![None; rules.len()];
+        if !self.playable
+            || self.stopped
+            || self.catching_up
+            || self.care.paused
+            || self.care_info_profile.is_none()
+        {
+            return none;
+        }
+        let Some(mut snap) = crate::event_notify::read_sram(&self.machine.sys.sram) else {
+            return none;
+        };
+        if let Some(rhythm) = self.sleep_profile.and_then(|profile| profile.rhythm(&self.machine)) {
+            snap.fullness_period = rhythm.fullness_period;
+            snap.mood_period = rhythm.mood_period;
+            snap.wake_hour = Some(rhythm.wake_hour);
+            snap.bed_hour = Some(rhythm.bed_hour);
+            snap.tod_seconds = rhythm.tod_seconds;
+        }
+        rules
+            .iter()
+            .map(|rule| crate::event_notify::eta_seconds(&snap, rule))
+            .collect()
+    }
+
     /// Current firmware care state; never runs or changes the game.
     pub fn potty_state(&self) -> Option<crate::potty::PottyState> {
         if !self.playable || self.stopped || self.catching_up {

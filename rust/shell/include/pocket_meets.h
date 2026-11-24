@@ -137,6 +137,9 @@ int pm_take_call(PmSession *s);
 int pm_potty_seconds(PmSession *s);
 /* Read-only hidden care JSON. Free with pm_string_free. Includes ROM compatibility. */
 char *pm_care_info(PmSession *s);
+/* JSON array aligned with rules_json. null = will not happen; 0 = already due.
+   Free with pm_string_free. */
+char *pm_event_eta(PmSession *s, const char *rules_json);
 int pm_save(PmSession *s);
 int pm_delete_current_save(PmSession *s);
 char *pm_import_save(PmSession *s, const char *path);

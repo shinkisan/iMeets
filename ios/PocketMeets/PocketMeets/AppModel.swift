@@ -242,6 +242,7 @@ final class AppModel: ObservableObject {
     func scene(_ phase: ScenePhase) {
         switch phase {
         case .active:
+            engine.syncEventNotifications(schedule: false)
             let wasPiP = pip.foregrounded()
             engine.setPipFrames(false)
             focused = true
@@ -286,6 +287,7 @@ final class AppModel: ObservableObject {
             engine.setVisible(false, interactive: false)
             if pipWanted { pip.backgrounded() }
             _ = engine.saveNow()
+            engine.syncEventNotifications(schedule: true)
         case .inactive:
             focused = false
             if pipWanted { engine.setPipFrames(true) }
@@ -447,6 +449,7 @@ final class AppModel: ObservableObject {
         pip.invalidatePlaybackState()
         if paused {
             UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: ["2"])
+            engine.syncEventNotifications(schedule: false)
         }
     }
 
