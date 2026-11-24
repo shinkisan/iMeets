@@ -8,6 +8,7 @@ enum ToyToolbarAction: String, CaseIterable, Identifiable {
     case translate
     case lan
     case pip
+    case shelf
 
     var id: String { rawValue }
 
@@ -20,6 +21,7 @@ enum ToyToolbarAction: String, CaseIterable, Identifiable {
         case .translate: return "character.bubble"
         case .lan: return "antenna.radiowaves.left.and.right"
         case .pip: return "pip"
+        case .shelf: return "books.vertical"
         }
     }
 
@@ -32,12 +34,13 @@ enum ToyToolbarAction: String, CaseIterable, Identifiable {
         case .translate: return english ? "Live translation" : "实时翻译"
         case .lan: return english ? "Face to Face" : "面对面"
         case .pip: return english ? "Picture in Picture" : "画中画"
+        case .shelf: return english ? "Tama Shelf" : "拓麻书架"
         }
     }
 
     var fixed: Bool { self == .lan }
 
-    static let defaultOrder: [ToyToolbarAction] = [.info, .appearance, .pause, .lan, .translate, .camera, .pip]
+    static let defaultOrder: [ToyToolbarAction] = [.info, .appearance, .pause, .lan, .translate, .camera, .pip, .shelf]
     static let defaultHidden: Set<ToyToolbarAction> = [.camera, .pip]
     static let maxVisible = 4
 
@@ -47,13 +50,15 @@ enum ToyToolbarAction: String, CaseIterable, Identifiable {
     static func availability(
         look: Int,
         screenshots: Bool,
-        cameraReady: Bool
+        cameraReady: Bool,
+        shelf: Bool
     ) -> Set<ToyToolbarAction> {
         var set: Set<ToyToolbarAction> = [.info, .pause, .lan, .pip]
         // The small-screen look has no top bar of its own to switch.
         if look != 2 { set.insert(.appearance) }
         if look == 1 || look == 2, screenshots, cameraReady { set.insert(.camera) }
         if #available(iOS 18.0, *) { set.insert(.translate) }
+        if shelf { set.insert(.shelf) }
         return set
     }
 }

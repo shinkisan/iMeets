@@ -37,6 +37,7 @@ struct SettingsView: View {
                 navRow("bell", model.t("notifications_title"), model.notificationStatusTitle) {
                     model.manageNotifications()
                 }
+                EventNotifySection()
             }
             Section(model.t("settings_system")) {
                 Toggle(isOn: pauseBinding) { settingLabel("pause.circle", model.t("pause_care")) }
@@ -62,6 +63,11 @@ struct SettingsView: View {
                 Text(model.t("progress_section"))
             }
             Section(model.t("settings_other")) {
+                navRow(
+                    "books.vertical",
+                    model.t("shelf_title"),
+                    model.t(model.prefs.shelf_enabled ? "shelf_status_on" : "shelf_status_off")
+                ) { model.page = .shelf }
                 navRow("globe", model.t("language_title"), model.prefs.language == "zh" ? "简体中文" : "English") { model.showLanguage = true }
                 navRow("info.circle", model.t("about_title"), nil) { model.page = .about }
             }
@@ -172,7 +178,8 @@ struct SettingsView: View {
         ToyToolbarAction.availability(
             look: ToyLook.resolve(model.prefs, dark: colorScheme == .dark),
             screenshots: model.prefs.screenshots,
-            cameraReady: model.hasSession && !model.shelfOpen
+            cameraReady: model.hasSession && !model.shelfOpen,
+            shelf: model.prefs.shelf_enabled
         )
     }
 
@@ -239,6 +246,215 @@ struct SettingsView: View {
         let scene = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first
         let host = scene?.windows.first { $0.isKeyWindow }?.rootViewController ?? scene?.windows.first?.rootViewController
         host?.present(picker, animated: true)
+    }
+}
+
+/// Expandable care reminders. The metric is a menu; the threshold is a wheel.
+private struct EventNotifySection: View {
+    @EnvironmentObject private var model: AppModel
+    @State private var wheel: Int?
+    @ScaledMetric(relativeTo: .body) private var iconColumn: CGFloat = 22
+
+    private var english: Bool { model.prefs.language == "en" }
+    private var rules: [EventRule] { model.prefs.event_rules }
+
+    var body: some View {
+        DisclosureGroup {
+            Text(english
+                 ? "While care is running, closing the simulator schedules a notification for each condition the pet is expected to meet. Only the verified Japanese Sweets ROM can estimate the time."
+                 : "未暂停时，关闭模拟器后，若预计宠物会满足下面任一条件，就发送通知。仅已验证的日版 Sweets 会估算时间。")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            if rules.isEmpty {
+                HStack {
+                    Text(english ? "Add a condition" : "添加条件")
+                        .foregroundStyle(Color(uiColor: .label))
+                    Spacer(minLength: 8)
+                    plusButton
+                }
+            }
+            ForEach(rules.indices, id: \.self) { index in
+                ruleRow(index)
+                if wheel == index {
+                    Picker(english ? "Threshold" : "阈值", selection: valueBinding(index)) {
+                        ForEach(EventRule.range(for: rules[index].metric), id: \.self) { value in
+                            Text("\(value)").tag(value)
+                        }
+                    }
+                    .pickerStyle(.wheel)
+                    .labelsHidden()
+                    .frame(height: 132)
+                }
+            }
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: "bell.badge")
+                    .frame(width: iconColumn)
+                    .foregroundStyle(Color.pmAccent)
+                    .accessibilityHidden(true)
+                Text(english ? "Event notifications" : "事件通知")
+            }
+        }
+    }
+
+    private func ruleRow(_ index: Int) -> some View {
+        HStack(spacing: 6) {
+            rowText(english ? "When" : "当")
+            metricMenu(index)
+            rowText(compareText(rules[index].metric))
+            numberButton(index)
+            if let tail = tailText(rules[index].metric) {
+                rowText(tail)
+            }
+            Spacer(minLength: 4)
+            if index == rules.count - 1, rules.count < EventRule.limit {
+                plusButton
+            }
+            Button {
+                remove(index)
+            } label: {
+                Image(systemName: "minus.circle.fill")
+                    .font(.title3)
+                    .foregroundStyle(Color(uiColor: .secondaryLabel))
+            }
+            .buttonStyle(.borderless)
+            .layoutPriority(1)
+            .accessibilityLabel(english ? "Remove condition" : "删除条件")
+        }
+    }
+
+    private func rowText(_ text: String) -> some View {
+        Text(text)
+            .foregroundStyle(Color(uiColor: .label))
+            .lineLimit(1)
+            .minimumScaleFactor(0.7)
+    }
+
+    private func metricMenu(_ index: Int) -> some View {
+        Menu {
+            ForEach(["hunger", "mood", "potty"], id: \.self) { metric in
+                Button {
+                    setMetric(index, metric)
+                } label: {
+                    if rules[index].metric == metric {
+                        Label(metricTitle(metric), systemImage: "checkmark")
+                    } else {
+                        Text(metricTitle(metric))
+                    }
+                }
+            }
+        } label: {
+            HStack(spacing: 2) {
+                Text(metricTitle(rules[index].metric))
+                Image(systemName: "chevron.up.chevron.down")
+                    .font(.caption2.weight(.semibold))
+                    .accessibilityHidden(true)
+            }
+            .foregroundStyle(Color(uiColor: .label))
+            .lineLimit(1)
+            .minimumScaleFactor(0.7)
+        }
+        .buttonStyle(.borderless)
+        .menuOrder(.fixed)
+        .accessibilityLabel(english ? "Condition" : "条件")
+    }
+
+    private func numberButton(_ index: Int) -> some View {
+        Button {
+            wheel = wheel == index ? nil : index
+        } label: {
+            Text("\(rules[index].below)")
+                .font(.body.monospacedDigit())
+                .foregroundStyle(Color(uiColor: .label))
+                .frame(minWidth: 32)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(Color(uiColor: .secondarySystemFill), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        }
+        .buttonStyle(.borderless)
+        .accessibilityLabel(english ? "Threshold \(rules[index].below)" : "阈值 \(rules[index].below)")
+    }
+
+    private var plusButton: some View {
+        Button(action: add) {
+            Image(systemName: "plus.circle.fill")
+                .font(.title3)
+                .foregroundStyle(Color.pmAccent)
+        }
+        .buttonStyle(.borderless)
+        .layoutPriority(1)
+        .accessibilityLabel(english ? "Add condition" : "添加条件")
+    }
+
+    private func valueBinding(_ index: Int) -> Binding<Int> {
+        Binding(
+            get: {
+                guard rules.indices.contains(index) else { return 1 }
+                return rules[index].below
+            },
+            set: { value in
+                var next = rules
+                guard next.indices.contains(index) else { return }
+                next[index].below = value
+                commit(next)
+            }
+        )
+    }
+
+    private func setMetric(_ index: Int, _ metric: String) {
+        var next = rules
+        next[index].metric = metric
+        next[index] = next[index].clamped()
+        commit(next)
+    }
+
+    private func add() {
+        guard rules.count < EventRule.limit else { return }
+        var next = rules
+        next.append(EventRule.fresh(among: rules))
+        commit(next)
+        wheel = nil
+        model.refreshNotificationPermission(requestIfNeeded: true)
+    }
+
+    private func remove(_ index: Int) {
+        guard rules.indices.contains(index) else { return }
+        var next = rules
+        next.remove(at: index)
+        if wheel == index {
+            wheel = nil
+        } else if let wheel, wheel > index {
+            self.wheel = wheel - 1
+        }
+        commit(next)
+    }
+
+    private func commit(_ rules: [EventRule]) {
+        var next = model.prefs
+        next.event_rules = rules.map { $0.clamped() }
+        // The wheel fires once per detent. Write the rules through without
+        // reloading the ROM library on every notch.
+        model.prefs = next
+        _ = model.engine.write(next)
+    }
+
+    private func metricTitle(_ metric: String) -> String {
+        switch metric {
+        case "mood": return english ? "Affection" : "亲密度"
+        case "potty": return english ? "Poop" : "排便"
+        default: return english ? "Hunger" : "饥饿度"
+        }
+    }
+
+    private func compareText(_ metric: String) -> String {
+        if metric == "potty" { return english ? "is within" : "前" }
+        return english ? "is below" : "小于"
+    }
+
+    private func tailText(_ metric: String) -> String? {
+        if metric == "potty" { return english ? "min" : "分钟时" }
+        return english ? nil : "时"
     }
 }
 

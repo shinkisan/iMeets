@@ -32,7 +32,11 @@ struct ShelfView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
-                Button(model.t("shelf_close")) { close() }
+                Button { close() } label: {
+                    Image(systemName: "chevron.backward")
+                        .font(.system(size: 17, weight: .semibold))
+                }
+                .accessibilityLabel(model.t("back"))
             }
         }
         .safeAreaInset(edge: .bottom) {

@@ -409,7 +409,8 @@ struct ToyView: View {
         ToyToolbarAction.availability(
             look: look,
             screenshots: model.prefs.screenshots,
-            cameraReady: shutterAllowed(guide: guide)
+            cameraReady: shutterAllowed(guide: guide),
+            shelf: model.prefs.shelf_enabled
         )
     }
 
@@ -456,6 +457,10 @@ struct ToyView: View {
                 active: pipEnabled
             ) {
                 togglePiP()
+            }
+        case .shelf:
+            chromeButton("books.vertical", action.title(english)) {
+                model.page = .shelf
             }
         }
     }
@@ -546,6 +551,8 @@ struct ToyView: View {
             }
         case .pip:
             togglePiP()
+        case .shelf:
+            model.page = .shelf
         }
     }
 
